@@ -1,0 +1,38 @@
+---
+description: Superpowers methodology for this project — check and invoke relevant skills before any response or action
+alwaysApply: true
+---
+
+# Superpowers (project)
+
+This project uses [Superpowers](https://github.com/obra/superpowers) (vendored in `vendor/superpowers/`).
+
+## Mandatory behavior
+
+**Before any response or action** — including clarifying questions, codebase exploration, or file reads — check whether a Superpowers skill applies. If it might apply (even 1%), read and follow it.
+
+1. Read `.cursor/skills/using-superpowers/SKILL.md` at session start (also injected by the `sessionStart` hook when available).
+2. For Cursor-specific tool mapping, read `.cursor/skills/using-superpowers/references/cursor-tools.md`.
+3. When a skill applies, announce "Using [skill] to [purpose]" and follow the skill exactly.
+
+## Skill locations
+
+| Location | Purpose |
+| --- | --- |
+| `.cursor/skills/` | Active skills for Cursor / cloud agent discovery |
+| `vendor/superpowers/skills/` | Upstream source (update with `scripts/update-superpowers.ps1`) |
+
+## Common triggers
+
+| Situation | Skill |
+| --- | --- |
+| New feature, component, or behavior change | `brainstorming` |
+| Bug, test failure, unexpected behavior | `systematic-debugging` |
+| Approved design → implementation plan | `writing-plans` |
+| Plan ready → execute | `subagent-driven-development` or `executing-plans` |
+| Writing code | `test-driven-development` |
+| Claiming work is done | `verification-before-completion` |
+
+Full skill index: `.cursor/CLOUD.md`
+
+User instructions in `AGENTS.md` and explicit user requests override skill workflows.
