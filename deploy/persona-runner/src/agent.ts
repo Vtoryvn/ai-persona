@@ -4,17 +4,12 @@ import OpenAI from "openai";
 import type { ChatCompletionMessageParam, ChatCompletionTool } from "openai/resources/chat/completions";
 import {
   missionResultSchema,
+  resolveLlmConfig,
   type MissionRequest,
   type MissionResult,
 } from "@persona-system/shared";
 
 const MAX_TOOL_ROUNDS = 24;
-
-function requireEnv(name: string, fallback?: string): string {
-  const value = process.env[name] ?? fallback;
-  if (!value) throw new Error(`Missing required env: ${name}`);
-  return value;
-}
 
 function buildSystemPrompt(mission: MissionRequest): string {
   const authBlock = mission.auth
@@ -75,11 +70,12 @@ export async function runMission(mission: MissionRequest): Promise<MissionResult
   const mcp = new Client({ name: "persona-runner", version: "0.1.0" });
   await mcp.connect(new StreamableHTTPClientTransport(new URL(mcpUrl)));
 
+  const llm = await resolveLlmConfig();
   const openai = new OpenAI({
-    apiKey: requireEnv("LLM_API_KEY"),
-    baseURL: process.env.LLM_BASE_URL,
+    apiKey: llm.apiKey,
+    baseURL: llm.baseUrl,
   });
-  const model = requireEnv("LLM_MODEL", "gpt-4o-mini");
+  const model = llm.model;
 
   try {
     const listed = await mcp.listTools();

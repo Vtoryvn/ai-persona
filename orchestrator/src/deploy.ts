@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
-import { loadPersonasDir } from "@persona-system/shared";
+import { loadPersonasDir, resolveLlmConfig } from "@persona-system/shared";
 
 function run(cmd: string, args: string[], cwd: string): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -46,5 +46,35 @@ export async function deployPersonas(options: {
       options.repoRoot,
     );
     if (code !== 0) throw new Error(`Deploy failed for ${persona.id} (exit ${code})`);
+  }
+}
+
+export async function syncLlmSecrets(options: {
+  personasDir: string;
+  personaIds?: string[];
+  repoRoot: string;
+}): Promise<void> {
+  const llm = await resolveLlmConfig({ repoRoot: options.repoRoot });
+  const all = await loadPersonasDir(options.personasDir);
+  const selected = options.personaIds?.length
+    ? all.filter((p) => options.personaIds!.includes(p.id))
+    : all;
+
+  for (const persona of selected) {
+    process.stderr.write(`Sync LLM secrets → ${persona.fly.app} (${llm.source})\n`);
+    const code = await run(
+      "fly",
+      [
+        "secrets",
+        "set",
+        "-a",
+        persona.fly.app,
+        `LLM_API_KEY=${llm.apiKey}`,
+        `LLM_BASE_URL=${llm.baseUrl}`,
+        `LLM_MODEL=${llm.model}`,
+      ],
+      options.repoRoot,
+    );
+    if (code !== 0) throw new Error(`Secret sync failed for ${persona.id}`);
   }
 }

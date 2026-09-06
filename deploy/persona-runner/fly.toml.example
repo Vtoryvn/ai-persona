@@ -28,4 +28,5 @@ primary_region = "sin"
   cpu_kind = "shared"
   cpus = 2
 
-# fly secrets set LLM_API_KEY=... LLM_BASE_URL=https://your-api/v1 LLM_MODEL=... RUNNER_AUTH_TOKEN=...
+# LLM secrets auto-synced from Lumen: npm run persona -- sync-secrets
+# Or manually: fly secrets set LLM_API_KEY=... LLM_BASE_URL=... LLM_MODEL=...

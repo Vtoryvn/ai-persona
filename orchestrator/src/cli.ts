@@ -2,7 +2,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
-import { deployPersonas } from "./deploy.js";
+import { deployPersonas, syncLlmSecrets } from "./deploy.js";
 import { runEval } from "./eval.js";
 import { writeReport } from "./report.js";
 
@@ -48,6 +48,15 @@ program
   .action(async (opts) => {
     const personaIds = opts.personas?.split(",").map((s: string) => s.trim()).filter(Boolean);
     await deployPersonas({ personasDir: defaultPersonasDir, personaIds, repoRoot });
+  });
+
+program
+  .command("sync-secrets")
+  .description("Sync LLM secrets to Fly apps from Lumen project env")
+  .option("--personas <ids>", "Comma-separated persona ids (default: all)")
+  .action(async (opts) => {
+    const personaIds = opts.personas?.split(",").map((s: string) => s.trim()).filter(Boolean);
+    await syncLlmSecrets({ personasDir: defaultPersonasDir, personaIds, repoRoot });
   });
 
 program

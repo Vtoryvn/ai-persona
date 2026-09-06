@@ -1,6 +1,6 @@
-import { readFile, readdir } from "node:fs/promises";
+import { access, readFile, readdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { parse } from "yaml";
+import { parse, stringify } from "yaml";
 import { personaConfigSchema, type PersonaConfig } from "./schemas.js";
 
 export async function loadPersonaFile(filePath: string): Promise<PersonaConfig> {
@@ -17,6 +17,45 @@ export async function loadPersonasDir(dir: string): Promise<PersonaConfig[]> {
     .sort();
 
   return Promise.all(files.map(loadPersonaFile));
+}
+
+export function personaFilePath(dir: string, id: string): string {
+  return path.join(dir, `${id}.yaml`);
+}
+
+export function serializePersona(config: PersonaConfig): string {
+  const doc = {
+    id: config.id,
+    name: config.name,
+    description: config.description,
+    instructions: config.instructions.trimEnd(),
+    evaluation: {
+      rubric: config.evaluation.rubric,
+      output_format: config.evaluation.output_format ?? "json",
+    },
+    browser: config.browser,
+    fly: config.fly,
+    ...(config.runner ? { runner: config.runner } : {}),
+  };
+  return `${stringify(doc, { lineWidth: 0 })}\n`;
+}
+
+export async function savePersonaFile(dir: string, config: PersonaConfig): Promise<string> {
+  const parsed = personaConfigSchema.parse(config);
+  const filePath = personaFilePath(dir, parsed.id);
+  await writeFile(filePath, serializePersona(parsed), "utf8");
+  return filePath;
+}
+
+export async function deletePersonaFile(dir: string, id: string): Promise<boolean> {
+  const filePath = personaFilePath(dir, id);
+  try {
+    await access(filePath);
+    await unlink(filePath);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function resolveRunnerUrl(
@@ -38,4 +77,19 @@ export function resolveRunnerUrl(
   }
 
   return `https://${persona.fly.app}.fly.dev`;
+}
+
+export function defaultPersonaConfig(id: string): PersonaConfig {
+  return personaConfigSchema.parse({
+    id,
+    name: id,
+    description: "Persona mới",
+    instructions: "Mô tả vai trò và cách đánh giá sản phẩm...",
+    evaluation: {
+      rubric: ["clarity", "usability"],
+      output_format: "json",
+    },
+    browser: { viewport: "1280x720", locale: "vi-VN" },
+    fly: { app: `persona-${id}`, region: "sin" },
+  });
 }
