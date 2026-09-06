@@ -17,28 +17,28 @@ program.name("persona").description("Persona evaluation orchestrator");
 
 program
   .command("eval")
-  .description("Run evaluation missions against deployed persona runners")
-  .requiredOption("--url <productUrl>", "Product URL to evaluate")
+  .description("Run a freeform prompt against deployed persona runners")
+  .requiredOption("--prompt <text>", "Freeform task prompt")
+  .option("--url <productUrl>", "Optional product URL")
   .option("--personas <ids>", "Comma-separated persona ids (default: all)")
-  .option("--focus <text>", "Optional evaluation focus")
   .option("--username <user>", "Product login username")
   .option("--password <pass>", "Product login password")
-  .option("--login-url <url>", "Login page URL (default: product url)")
+  .option("--login-url <url>", "Login page URL")
   .option("--out <dir>", "Output directory")
   .action(async (opts) => {
     const personaIds = opts.personas?.split(",").map((s: string) => s.trim()).filter(Boolean);
     const { runDir, results } = await runEval({
+      prompt: opts.prompt,
       productUrl: opts.url,
       personasDir: defaultPersonasDir,
       personaIds,
-      focus: opts.focus,
       username: opts.username,
       password: opts.password,
       loginUrl: opts.loginUrl,
       outDir: opts.out,
     });
 
-    const reportPath = await writeReport(runDir, opts.url, results);
+    const reportPath = await writeReport(runDir, opts.prompt, results);
     const failed = results.filter((r) => !r.ok).length;
     console.log(`Report: ${reportPath}`);
     if (failed) process.exit(1);

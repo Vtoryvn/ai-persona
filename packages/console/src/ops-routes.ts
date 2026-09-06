@@ -12,6 +12,8 @@ import {
   createJob,
   getJob,
   listJobs,
+  publicJob,
+  appendJobEvent,
   runJob,
 } from "./jobs.js";
 import type { PersonaEvalResult } from "@persona-system/orchestrator";
@@ -26,20 +28,32 @@ interface PersonaIdsBody {
 }
 
 interface EvalBody extends PersonaIdsBody {
-  productUrl: string;
+  prompt: string;
+  productUrl?: string;
   username?: string;
   password?: string;
   loginUrl?: string;
-  focus?: string;
 }
 
 export function registerOpsRoutes(app: FastifyInstance, ctx: OpsContext) {
-  app.get("/api/ops/jobs", async () => listJobs());
+  app.get("/api/ops/jobs", async () => listJobs().map(publicJob));
 
   app.get<{ Params: { id: string } }>("/api/ops/jobs/:id", async (request, reply) => {
     const job = getJob(request.params.id);
     if (!job) return reply.code(404).send({ error: "job_not_found" });
-    return job;
+    return publicJob(job);
+  });
+
+  app.get<{ Params: { id: string } }>("/api/ops/jobs/:id/screen", async (request, reply) => {
+    const job = getJob(request.params.id);
+    if (!job) return reply.code(404).send({ error: "job_not_found" });
+    return {
+      status: job.status,
+      session: job.session,
+      prompt: job.prompt,
+      thought: job.session.thought,
+      tool: job.session.tool,
+    };
   });
 
   app.get("/api/ops/runs", async () => {
@@ -134,25 +148,26 @@ export function registerOpsRoutes(app: FastifyInstance, ctx: OpsContext) {
 
   app.post<{ Body: EvalBody }>("/api/ops/eval", async (request, reply) => {
     const body = request.body;
-    if (!body?.productUrl) {
-      return reply.code(400).send({ error: "productUrl required" });
+    if (!body?.prompt?.trim()) {
+      return reply.code(400).send({ error: "prompt required" });
     }
 
-    const job = createJob("eval", `Eval ${body.productUrl}`);
+    const job = createJob("eval", body.prompt.trim().slice(0, 80), body.prompt.trim());
 
     void runJob(job, async (log) => {
       const { runDir, results } = await runEval({
+        prompt: body.prompt.trim(),
         productUrl: body.productUrl,
         personasDir: ctx.personasDir,
         personaIds: body.personaIds,
-        focus: body.focus,
         username: body.username,
         password: body.password,
         loginUrl: body.loginUrl,
         outDir: path.join(ctx.repoRoot, "artifacts", "evaluations", `ui-${Date.now()}`),
         onLog: log,
+        onEvent: (event) => appendJobEvent(job, event),
       });
-      const reportPath = await writeReport(runDir, body.productUrl, results);
+      const reportPath = await writeReport(runDir, body.prompt.trim(), results);
       log(`Báo cáo: ${reportPath}`);
       return { runDir, reportPath, results, failed: results.filter((r: PersonaEvalResult) => !r.ok).length };
     });

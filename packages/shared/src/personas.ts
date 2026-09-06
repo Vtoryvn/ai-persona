@@ -30,8 +30,8 @@ export function serializePersona(config: PersonaConfig): string {
     description: config.description,
     instructions: config.instructions.trimEnd(),
     evaluation: {
-      rubric: config.evaluation.rubric,
-      output_format: config.evaluation.output_format ?? "json",
+      rubric: config.evaluation?.rubric ?? [],
+      output_format: config.evaluation?.output_format ?? "json",
     },
     browser: config.browser,
     fly: config.fly,

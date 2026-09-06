@@ -86,22 +86,33 @@
         <section id="view-eval" class="hidden">
           <header class="editor-header">
             <div>
-              <h2>Đánh giá sản phẩm</h2>
-              <p>Gửi mission tới các runner trên Fly (có thể mất vài phút/persona).</p>
+              <h2>Giao việc cho persona</h2>
+              <p>Prompt tự do — agent dùng Chrome trên máy ảo Fly. Theo dõi màn hình bên dưới.</p>
             </div>
           </header>
-          <form id="eval-form">
-            <label>URL sản phẩm <input id="eval-url" type="url" required placeholder="https://..." /></label>
-            <div class="grid">
-              <label>Username <input id="eval-user" autocomplete="off" /></label>
-              <label>Password <input id="eval-pass" type="password" autocomplete="off" /></label>
-            </div>
-            <label>Login URL (tuỳ chọn) <input id="eval-login-url" type="url" placeholder="mặc định = URL sản phẩm" /></label>
-            <label>Focus <input id="eval-focus" placeholder="Onboarding lần đầu" /></label>
+          <form id="eval-form" class="composer">
+            <textarea id="eval-prompt" rows="5" required placeholder="Ví dụ: Vào https://example.com, đăng nhập user demo / pass secret, đi hết onboarding và nói cảm nhận của bạn."></textarea>
             <div id="eval-persona-checks" class="check-grid"></div>
-            <button type="submit" class="btn primary">Chạy đánh giá</button>
+            <button type="submit" class="btn primary">Chạy</button>
           </form>
-          <div id="eval-report" class="eval-report hidden"></div>
+
+          <div id="session-view" class="session-view hidden">
+            <div class="computer">
+              <header class="computer-bar">
+                <span>Máy ảo</span>
+                <span id="computer-meta" class="meta">Chưa có session</span>
+              </header>
+              <div class="computer-screen">
+                <img id="computer-shot" alt="Màn hình máy ảo" class="hidden" />
+                <div id="computer-empty" class="computer-empty">Đang chờ Chrome trên VM...</div>
+              </div>
+            </div>
+            <div class="session-feed">
+              <header class="computer-bar"><span>Hoạt động</span></header>
+              <div id="session-thought" class="thought"></div>
+              <ol id="session-events" class="event-list"></ol>
+            </div>
+          </div>
         </section>
 
         <!-- Job log panel -->

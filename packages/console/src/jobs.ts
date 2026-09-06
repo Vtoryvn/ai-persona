@@ -1,7 +1,15 @@
 import { randomUUID } from "node:crypto";
+import type { MissionEvent } from "@persona-system/shared";
 
 export type JobType = "deploy" | "sync-secrets" | "health" | "eval";
 export type JobStatus = "queued" | "running" | "completed" | "failed";
+
+export interface SessionFrame {
+  personaId?: string;
+  tool?: string;
+  thought?: string;
+  screenshot?: { mime: string; data: string; caption?: string };
+}
 
 export interface Job {
   id: string;
@@ -9,6 +17,9 @@ export interface Job {
   status: JobStatus;
   label: string;
   logs: string[];
+  events: MissionEvent[];
+  session: SessionFrame;
+  prompt?: string;
   result?: unknown;
   error?: string;
   createdAt: string;
@@ -17,6 +28,7 @@ export interface Job {
 
 const jobs = new Map<string, Job>();
 const MAX_JOBS = 30;
+const MAX_EVENTS = 200;
 
 function trimJobs() {
   if (jobs.size <= MAX_JOBS) return;
@@ -32,13 +44,31 @@ export function getJob(id: string): Job | undefined {
   return jobs.get(id);
 }
 
-export function createJob(type: JobType, label: string): Job {
+export function publicJob(job: Job): Omit<Job, "events"> & { events: MissionEvent[] } {
+  return {
+    ...job,
+    session: {
+      ...job.session,
+      screenshot: job.session.screenshot
+        ? { mime: job.session.screenshot.mime, caption: job.session.screenshot.caption, data: "[omitted]" }
+        : undefined,
+    },
+    events: job.events.map((event) =>
+      event.type === "screenshot" ? { ...event, data: event.data ? "[omitted]" : undefined } : event,
+    ),
+  };
+}
+
+export function createJob(type: JobType, label: string, prompt?: string): Job {
   const job: Job = {
     id: randomUUID(),
     type,
     status: "queued",
     label,
     logs: [],
+    events: [],
+    session: {},
+    prompt,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -50,6 +80,28 @@ export function createJob(type: JobType, label: string): Job {
 export function appendJobLog(job: Job, line: string) {
   job.logs.push(line);
   if (job.logs.length > 500) job.logs.shift();
+  job.updatedAt = new Date().toISOString();
+}
+
+export function appendJobEvent(job: Job, event: MissionEvent) {
+  job.events.push(event);
+  if (job.events.length > MAX_EVENTS) job.events.shift();
+
+  if (event.personaId) job.session.personaId = event.personaId;
+  if (event.type === "tool") job.session.tool = event.name ?? event.message;
+  if (event.type === "thought" && event.text) job.session.thought = event.text;
+  if (event.type === "screenshot" && event.data) {
+    job.session.screenshot = {
+      mime: event.mime ?? "image/jpeg",
+      data: event.data,
+      caption: event.caption,
+    };
+  }
+  if (event.type === "status" && event.message) appendJobLog(job, event.message);
+  if (event.type === "tool") appendJobLog(job, `⚙ ${event.name ?? event.message}`);
+  if (event.type === "thought" && event.text) appendJobLog(job, event.text.slice(0, 240));
+  if (event.type === "error" && event.message) appendJobLog(job, `✗ ${event.message}`);
+
   job.updatedAt = new Date().toISOString();
 }
 

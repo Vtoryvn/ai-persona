@@ -258,6 +258,101 @@ textarea {
   border-color: rgba(255, 107, 107, 0.35);
 }
 
+.composer textarea {
+  min-height: 120px;
+}
+
+.session-view {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 1rem;
+  margin-top: 1.25rem;
+  min-height: 420px;
+}
+
+.computer,
+.session-feed {
+  background: #0a0c10;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.computer-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.55rem 0.8rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.8rem;
+  background: var(--panel-2);
+}
+
+.computer-screen {
+  flex: 1;
+  min-height: 320px;
+  background: #111;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.computer-screen img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+.computer-empty {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.thought {
+  padding: 0.75rem 0.9rem;
+  color: var(--text);
+  font-size: 0.9rem;
+  line-height: 1.4;
+  border-bottom: 1px solid var(--border);
+  min-height: 3rem;
+}
+
+.event-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.5rem 0.75rem 1rem;
+  overflow: auto;
+  flex: 1;
+  font-size: 0.8rem;
+}
+
+.event-list li {
+  padding: 0.35rem 0;
+  color: var(--muted);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.event-list li.tool {
+  color: var(--accent);
+}
+
+.event-list li.thought {
+  color: var(--text);
+}
+
+.event-list li.error {
+  color: var(--danger);
+}
+
+@media (max-width: 1100px) {
+  .session-view {
+    grid-template-columns: 1fr;
+  }
+}
+
 .job-panel {
   margin-top: 2rem;
   border-top: 1px solid var(--border);

@@ -10,7 +10,7 @@ const personaPath = path.join(repoRoot, "personas", "first-timer.yaml");
 test("loadPersonaFile parses starter persona", async () => {
   const persona = await loadPersonaFile(personaPath);
   assert.equal(persona.id, "first-timer");
-  assert.ok(persona.evaluation.rubric.includes("clarity"));
+  assert.ok(persona.evaluation?.rubric?.includes("clarity"));
 });
 
 test("resolveRunnerUrl uses fly app", async () => {

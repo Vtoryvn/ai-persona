@@ -123,6 +123,10 @@ async function pollJob(jobId) {
     jobLog.scrollTop = jobLog.scrollHeight;
     setJobBadge(job.status);
 
+    if (job.type === "eval") {
+      await updateSession(jobId, job);
+    }
+
     if (job.status === "completed" || job.status === "failed") {
       clearInterval(pollTimer);
       pollTimer = null;
@@ -131,14 +135,54 @@ async function pollJob(jobId) {
       if (job.type === "health" && job.result?.results) {
         showHealthResults(job.result.results);
       }
-      if (job.type === "eval" && job.status === "completed" && job.result?.reportPath) {
-        showEvalReport(job.result);
-      }
     }
   };
 
   await tick();
-  pollTimer = setInterval(tick, 1500);
+  pollTimer = setInterval(tick, 1200);
+}
+
+function renderSessionEvents(events) {
+  const list = document.getElementById("session-events");
+  list.innerHTML = "";
+  const recent = (events || []).filter((e) => e.type !== "screenshot").slice(-40);
+  for (const event of recent) {
+    const li = document.createElement("li");
+    li.className = `event ${event.type}`;
+    if (event.type === "tool") li.textContent = `⚙ ${event.name || event.message}`;
+    else if (event.type === "thought") li.textContent = event.text || "";
+    else if (event.type === "status") li.textContent = event.message || "";
+    else if (event.type === "result") li.textContent = "✓ Xong";
+    else if (event.type === "error") li.textContent = `✗ ${event.message}`;
+    else li.textContent = event.message || event.type;
+    list.appendChild(li);
+  }
+  list.scrollTop = list.scrollHeight;
+}
+
+async function updateSession(jobId, job) {
+  const view = document.getElementById("session-view");
+  view.classList.remove("hidden");
+  renderSessionEvents(job.events);
+
+  const screen = await api(`/api/ops/jobs/${jobId}/screen`);
+  const meta = document.getElementById("computer-meta");
+  const thought = document.getElementById("session-thought");
+  const img = document.getElementById("computer-shot");
+  const empty = document.getElementById("computer-empty");
+
+  const bits = [];
+  if (screen.session?.personaId) bits.push(screen.session.personaId);
+  if (screen.session?.tool) bits.push(screen.session.tool);
+  meta.textContent = bits.join(" · ") || job.status;
+
+  thought.textContent = screen.session?.thought || "";
+
+  if (screen.session?.screenshot?.data && screen.session.screenshot.data !== "[omitted]") {
+    img.src = `data:${screen.session.screenshot.mime};base64,${screen.session.screenshot.data}`;
+    img.classList.remove("hidden");
+    empty.classList.add("hidden");
+  }
 }
 
 async function startJob(path, body) {
@@ -161,29 +205,12 @@ function showHealthResults(results) {
     .join("");
 }
 
-function showEvalReport(result) {
-  const box = document.getElementById("eval-report");
-  box.classList.remove("hidden");
-  const runId = result.runDir.split(/[/\\]/).pop();
-  box.innerHTML = `
-    <p class="ok">Hoàn tất — ${result.results.length - result.failed}/${result.results.length} thành công</p>
-    <button type="button" class="btn" id="load-report-btn">Xem báo cáo</button>
-    <pre id="report-content" class="report-pre hidden"></pre>
-  `;
-  document.getElementById("load-report-btn").addEventListener("click", async () => {
-    const report = await api(`/api/ops/runs/${runId}/report`);
-    const pre = document.getElementById("report-content");
-    pre.textContent = report.content;
-    pre.classList.remove("hidden");
-  });
-}
-
 async function loadLlmBadge() {
   try {
     const cfg = await api("/api/config/llm");
     if (!cfg.ok) throw new Error(cfg.error || "LLM chưa cấu hình");
     llmBadge.className = "llm-badge ok";
-    llmBadge.innerHTML = `<strong>LLM</strong> ${cfg.model}<br /><span>${cfg.baseUrl}</span><br /><span>${cfg.apiKeyMasked}</span>`;
+    llmBadge.innerHTML = `<strong>LLM</strong> ${cfg.model}<br /><span>${cfg.baseUrl}</span><span> ${cfg.apiKeyMasked}</span>`;
   } catch (error) {
     llmBadge.className = "llm-badge error";
     llmBadge.textContent = error.message;
@@ -291,13 +318,14 @@ document.getElementById("ops-health").addEventListener("click", () => {
 
 document.getElementById("eval-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  document.getElementById("eval-report").classList.add("hidden");
+  showView("eval");
+  document.getElementById("session-view").classList.remove("hidden");
+  document.getElementById("computer-empty").classList.remove("hidden");
+  document.getElementById("computer-shot").classList.add("hidden");
+  document.getElementById("session-events").innerHTML = "";
+  document.getElementById("session-thought").textContent = "";
   await startJob("/api/ops/eval", {
-    productUrl: document.getElementById("eval-url").value.trim(),
-    username: document.getElementById("eval-user").value.trim() || undefined,
-    password: document.getElementById("eval-pass").value || undefined,
-    loginUrl: document.getElementById("eval-login-url").value.trim() || undefined,
-    focus: document.getElementById("eval-focus").value.trim() || undefined,
+    prompt: document.getElementById("eval-prompt").value.trim(),
     personaIds: getCheckedIds("eval-persona-checks"),
   });
 });

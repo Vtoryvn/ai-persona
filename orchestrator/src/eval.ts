@@ -1,19 +1,21 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { MissionResult, PersonaConfig } from "@persona-system/shared";
+import type { MissionEvent, MissionResult, PersonaConfig } from "@persona-system/shared";
 
 export type LogFn = (line: string) => void;
+export type EventFn = (event: MissionEvent) => void;
 
 export interface EvalOptions {
-  productUrl: string;
+  prompt: string;
   personasDir: string;
   personaIds?: string[];
-  focus?: string;
+  productUrl?: string;
   username?: string;
   password?: string;
   loginUrl?: string;
   outDir?: string;
   onLog?: LogFn;
+  onEvent?: EventFn;
 }
 
 export interface PersonaEvalResult {
@@ -25,9 +27,46 @@ export interface PersonaEvalResult {
 
 function authHeaders(): Record<string, string> {
   const token = process.env.RUNNER_AUTH_TOKEN;
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "text/event-stream",
+  };
   if (token) headers.Authorization = `Bearer ${token}`;
   return headers;
+}
+
+async function readSse(
+  response: Response,
+  personaId: string,
+  onEvent?: EventFn,
+): Promise<MissionResult | undefined> {
+  if (!response.body) return undefined;
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let lastResult: MissionResult | undefined;
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const chunks = buffer.split("\n\n");
+    buffer = chunks.pop() ?? "";
+    for (const chunk of chunks) {
+      const line = chunk.split("\n").find((l) => l.startsWith("data: "));
+      if (!line) continue;
+      try {
+        const event = JSON.parse(line.slice(6)) as MissionEvent;
+        event.personaId ??= personaId;
+        onEvent?.(event);
+        if (event.type === "result" && event.result) lastResult = event.result;
+      } catch {
+        // ignore malformed events
+      }
+    }
+  }
+
+  return lastResult;
 }
 
 async function dispatchMission(
@@ -39,10 +78,11 @@ async function dispatchMission(
 
   const body = {
     persona_id: persona.id,
+    prompt: options.prompt,
     product_url: options.productUrl,
     instructions: persona.instructions,
-    rubric: persona.evaluation.rubric,
-    focus: options.focus,
+    rubric: persona.evaluation?.rubric,
+    stream: true,
     auth:
       options.username && options.password
         ? {
@@ -62,6 +102,16 @@ async function dispatchMission(
       signal: AbortSignal.timeout(Number(process.env.MISSION_TIMEOUT_MS ?? 600_000)),
     });
 
+    const contentType = response.headers.get("content-type") ?? "";
+    if (contentType.includes("text/event-stream")) {
+      const result = await readSse(response, persona.id, options.onEvent);
+      if (!response.ok && !result) {
+        return { persona, ok: false, error: response.statusText };
+      }
+      if (!result) return { persona, ok: false, error: "stream ended without result" };
+      return { persona, ok: true, result };
+    }
+
     const payload = (await response.json()) as Record<string, unknown>;
     if (!response.ok) {
       return {
@@ -70,7 +120,6 @@ async function dispatchMission(
         error: String(payload.message ?? payload.error ?? response.statusText),
       };
     }
-
     return { persona, ok: true, result: payload as unknown as MissionResult };
   } catch (error) {
     return {
@@ -102,12 +151,16 @@ export async function runEval(options: EvalOptions): Promise<{
   const results: PersonaEvalResult[] = [];
   for (const persona of selected) {
     options.onLog?.(`→ ${persona.name} (${persona.id})...`);
+    options.onEvent?.({
+      type: "status",
+      at: new Date().toISOString(),
+      personaId: persona.id,
+      message: `Bắt đầu ${persona.name}`,
+    });
     const result = await dispatchMission(persona, options);
     results.push(result);
     options.onLog?.(
-      result.ok
-        ? `✓ ${persona.id} done`
-        : `✗ ${persona.id}: ${result.error ?? "failed"}`,
+      result.ok ? `✓ ${persona.id} done` : `✗ ${persona.id}: ${result.error ?? "failed"}`,
     );
 
     await writeFile(
