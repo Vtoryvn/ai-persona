@@ -14,6 +14,7 @@ import {
   resolveLlmConfig,
   savePersonaFile,
 } from "@persona-system/shared";
+import { registerOpsRoutes } from "./ops-routes.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const personasDir = process.env.PERSONAS_DIR ?? path.join(repoRoot, "personas");
@@ -107,6 +108,8 @@ export async function buildServer() {
     const id = (request.params as { id: string }).id;
     return defaultPersonaConfig(id);
   });
+
+  registerOpsRoutes(app, { repoRoot, personasDir });
 
   return app;
 }

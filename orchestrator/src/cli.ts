@@ -50,7 +50,7 @@ program
   .option("--personas <ids>", "Comma-separated persona ids (default: all)")
   .action(async (opts) => {
     const personaIds = opts.personas?.split(",").map((s: string) => s.trim()).filter(Boolean);
-    await deployPersonas({ personasDir: defaultPersonasDir, personaIds, repoRoot });
+    await deployPersonas({ personasDir: defaultPersonasDir, personaIds, repoRoot, onLog: (l) => process.stderr.write(`${l}\n`) });
   });
 
 program
@@ -59,7 +59,7 @@ program
   .option("--personas <ids>", "Comma-separated persona ids (default: all)")
   .action(async (opts) => {
     const personaIds = opts.personas?.split(",").map((s: string) => s.trim()).filter(Boolean);
-    await syncLlmSecrets({ personasDir: defaultPersonasDir, personaIds, repoRoot });
+    await syncLlmSecrets({ personasDir: defaultPersonasDir, personaIds, repoRoot, onLog: (l) => process.stderr.write(`${l}\n`) });
   });
 
 program

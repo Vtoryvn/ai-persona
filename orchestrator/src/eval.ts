@@ -2,6 +2,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { MissionResult, PersonaConfig } from "@persona-system/shared";
 
+export type LogFn = (line: string) => void;
+
 export interface EvalOptions {
   productUrl: string;
   personasDir: string;
@@ -11,6 +13,7 @@ export interface EvalOptions {
   password?: string;
   loginUrl?: string;
   outDir?: string;
+  onLog?: LogFn;
 }
 
 export interface PersonaEvalResult {
@@ -98,9 +101,14 @@ export async function runEval(options: EvalOptions): Promise<{
 
   const results: PersonaEvalResult[] = [];
   for (const persona of selected) {
-    process.stderr.write(`→ ${persona.name} (${persona.id})...\n`);
+    options.onLog?.(`→ ${persona.name} (${persona.id})...`);
     const result = await dispatchMission(persona, options);
     results.push(result);
+    options.onLog?.(
+      result.ok
+        ? `✓ ${persona.id} done`
+        : `✗ ${persona.id}: ${result.error ?? "failed"}`,
+    );
 
     await writeFile(
       path.join(runDir, `${persona.id}.json`),

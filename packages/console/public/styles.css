@@ -181,6 +181,154 @@ textarea {
   color: var(--danger);
 }
 
+.main-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.nav-btn {
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text);
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.nav-btn:hover,
+.nav-btn.active {
+  background: var(--panel-2);
+  border-color: var(--border);
+}
+
+.check-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.check-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.65rem;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.check-item .meta {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.ops-actions {
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.wizard-steps {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-top: 1rem;
+}
+
+.health-results {
+  margin-top: 1rem;
+}
+
+.health-row {
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  margin-bottom: 0.35rem;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+}
+
+.health-row.ok {
+  border-color: rgba(81, 207, 102, 0.35);
+}
+
+.health-row.err {
+  border-color: rgba(255, 107, 107, 0.35);
+}
+
+.job-panel {
+  margin-top: 2rem;
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+}
+
+.job-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.job-header h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.badge {
+  font-size: 0.7rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+}
+
+.badge.running {
+  color: var(--accent);
+}
+
+.badge.completed {
+  color: var(--ok);
+}
+
+.badge.failed {
+  color: var(--danger);
+}
+
+.job-log {
+  background: #0a0c10;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.75rem;
+  max-height: 220px;
+  overflow: auto;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.eval-report {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: var(--panel-2);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+.report-pre {
+  margin-top: 0.75rem;
+  max-height: 400px;
+  overflow: auto;
+  background: #0a0c10;
+  padding: 0.75rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+}
+
 @media (max-width: 900px) {
   .layout {
     grid-template-columns: 1fr;

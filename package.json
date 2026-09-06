@@ -8,7 +8,7 @@
     "deploy/persona-runner"
   ],
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
+    "build": "npm run build -w @persona-system/shared && npm run build -w @persona-system/orchestrator && npm run build -w @persona-system/runner && npm run build -w @persona-system/console",
     "test": "npm run test --workspaces --if-present",
     "persona": "npm run start -w orchestrator --",
     "ui": "npm run start -w @persona-system/console",

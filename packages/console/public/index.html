@@ -11,77 +11,107 @@
       <aside class="sidebar">
         <div class="brand">
           <h1>Persona Console</h1>
-          <p>Quản lý instructions & rubric</p>
+          <p>Quản lý & vận hành persona agents</p>
         </div>
         <div id="llm-badge" class="llm-badge">Đang tải LLM config...</div>
-        <button id="new-persona" class="btn primary">+ Persona mới</button>
-        <ul id="persona-list" class="persona-list"></ul>
+        <nav class="main-nav">
+          <button type="button" class="nav-btn active" data-view="personas">Personas</button>
+          <button type="button" class="nav-btn" data-view="ops">Fly & Deploy</button>
+          <button type="button" class="nav-btn" data-view="eval">Đánh giá</button>
+        </nav>
+        <button id="new-persona" class="btn primary view-personas-only">+ Persona mới</button>
+        <ul id="persona-list" class="persona-list view-personas-only"></ul>
       </aside>
 
       <main class="editor">
-        <div id="empty-state" class="empty-state">
-          Chọn persona bên trái hoặc tạo mới.
-        </div>
+        <!-- Personas editor -->
+        <section id="view-personas">
+          <div id="empty-state" class="empty-state">
+            Chọn persona bên trái hoặc tạo mới.
+          </div>
+          <form id="persona-form" class="hidden">
+            <header class="editor-header">
+              <div>
+                <h2 id="form-title">Persona</h2>
+                <p id="form-subtitle"></p>
+              </div>
+              <div class="actions">
+                <button type="button" id="delete-persona" class="btn danger">Xóa</button>
+                <button type="submit" class="btn primary">Lưu</button>
+              </div>
+            </header>
+            <div class="grid">
+              <label>ID <input id="field-id" pattern="[a-z0-9-]+" required /></label>
+              <label>Tên hiển thị <input id="field-name" required /></label>
+            </div>
+            <label>Mô tả ngắn <input id="field-description" required /></label>
+            <label>Instructions / System prompt
+              <textarea id="field-instructions" rows="14" required></textarea>
+            </label>
+            <label>Rubric (mỗi dòng một tiêu chí)
+              <textarea id="field-rubric" rows="5" required></textarea>
+            </label>
+            <div class="grid">
+              <label>Viewport <input id="field-viewport" placeholder="1280x720" /></label>
+              <label>Locale <input id="field-locale" placeholder="vi-VN" /></label>
+              <label>Fly app <input id="field-fly-app" required /></label>
+              <label>Fly region <input id="field-fly-region" required /></label>
+            </div>
+            <p id="status" class="status"></p>
+          </form>
+        </section>
 
-        <form id="persona-form" class="hidden">
+        <!-- Fly ops -->
+        <section id="view-ops" class="hidden">
           <header class="editor-header">
             <div>
-              <h2 id="form-title">Persona</h2>
-              <p id="form-subtitle"></p>
-            </div>
-            <div class="actions">
-              <button type="button" id="delete-persona" class="btn danger">Xóa</button>
-              <button type="submit" class="btn primary">Lưu</button>
+              <h2>Fly.io — Deploy & Secrets</h2>
+              <p>Chọn persona, deploy lên Fly, sync LLM secrets, kiểm tra health.</p>
             </div>
           </header>
-
-          <div class="grid">
-            <label>
-              ID
-              <input id="field-id" name="id" pattern="[a-z0-9-]+" required />
-            </label>
-            <label>
-              Tên hiển thị
-              <input id="field-name" name="name" required />
-            </label>
+          <div id="ops-persona-checks" class="check-grid"></div>
+          <div class="actions ops-actions">
+            <button type="button" id="ops-select-all" class="btn">Chọn tất cả</button>
+            <button type="button" id="ops-deploy" class="btn primary">Deploy</button>
+            <button type="button" id="ops-sync" class="btn">Sync LLM secrets</button>
+            <button type="button" id="ops-health" class="btn">Check health</button>
           </div>
-
-          <label>
-            Mô tả ngắn
-            <input id="field-description" name="description" required />
-          </label>
-
-          <label>
-            Instructions / System prompt
-            <textarea id="field-instructions" name="instructions" rows="14" required></textarea>
-          </label>
-
-          <label>
-            Rubric (mỗi dòng một tiêu chí)
-            <textarea id="field-rubric" name="rubric" rows="5" required></textarea>
-          </label>
-
-          <div class="grid">
-            <label>
-              Viewport
-              <input id="field-viewport" name="viewport" placeholder="1280x720" />
-            </label>
-            <label>
-              Locale
-              <input id="field-locale" name="locale" placeholder="vi-VN" />
-            </label>
-            <label>
-              Fly app
-              <input id="field-fly-app" name="flyApp" required />
-            </label>
-            <label>
-              Fly region
-              <input id="field-fly-region" name="flyRegion" required />
-            </label>
+          <div id="health-results" class="health-results hidden"></div>
+          <div class="wizard-steps">
+            <span>① Deploy</span> → <span>② Sync secrets</span> → <span>③ Check health</span> → <span>④ Tab Đánh giá</span>
           </div>
+        </section>
 
-          <p id="status" class="status"></p>
-        </form>
+        <!-- Eval -->
+        <section id="view-eval" class="hidden">
+          <header class="editor-header">
+            <div>
+              <h2>Đánh giá sản phẩm</h2>
+              <p>Gửi mission tới các runner trên Fly (có thể mất vài phút/persona).</p>
+            </div>
+          </header>
+          <form id="eval-form">
+            <label>URL sản phẩm <input id="eval-url" type="url" required placeholder="https://..." /></label>
+            <div class="grid">
+              <label>Username <input id="eval-user" autocomplete="off" /></label>
+              <label>Password <input id="eval-pass" type="password" autocomplete="off" /></label>
+            </div>
+            <label>Login URL (tuỳ chọn) <input id="eval-login-url" type="url" placeholder="mặc định = URL sản phẩm" /></label>
+            <label>Focus <input id="eval-focus" placeholder="Onboarding lần đầu" /></label>
+            <div id="eval-persona-checks" class="check-grid"></div>
+            <button type="submit" class="btn primary">Chạy đánh giá</button>
+          </form>
+          <div id="eval-report" class="eval-report hidden"></div>
+        </section>
+
+        <!-- Job log panel -->
+        <section class="job-panel">
+          <header class="job-header">
+            <h3>Tiến trình</h3>
+            <span id="job-status-badge" class="badge idle">Idle</span>
+          </header>
+          <pre id="job-log" class="job-log">Chưa có tác vụ.</pre>
+        </section>
       </main>
     </div>
     <script type="module" src="/app.js"></script>
