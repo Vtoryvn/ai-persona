@@ -1,4 +1,5 @@
 import { access, readFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 
 export interface LlmConfig {
@@ -10,7 +11,6 @@ export interface LlmConfig {
 
 export interface ResolveLlmOptions {
   repoRoot?: string;
-  lumenProjectPath?: string;
   env?: NodeJS.ProcessEnv;
 }
 
@@ -43,26 +43,37 @@ async function fileExists(filePath: string): Promise<boolean> {
   }
 }
 
-export function resolveLumenProjectPath(options: ResolveLlmOptions = {}): string {
-  const env = options.env ?? process.env;
-  if (env.LUMEN_PROJECT_PATH) {
-    return path.resolve(env.LUMEN_PROJECT_PATH);
+export function findRepoRoot(startDir: string = process.cwd()): string {
+  let dir = path.resolve(startDir);
+  while (true) {
+    const pkgPath = path.join(dir, "package.json");
+    try {
+      const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as { name?: string };
+      if (pkg.name === "persona-system") return dir;
+    } catch {
+      // keep walking
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) return path.resolve(startDir);
+    dir = parent;
   }
-  if (options.lumenProjectPath) {
-    return path.resolve(options.lumenProjectPath);
-  }
-  const repoRoot = options.repoRoot ?? process.cwd();
-  return path.resolve(repoRoot, "..", "lumen");
 }
 
-async function loadLumenEnvFiles(lumenRoot: string): Promise<Record<string, string>> {
-  const merged: Record<string, string> = {};
+export async function loadProjectEnv(
+  repoRoot: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<string[]> {
+  const loaded: string[] = [];
   for (const name of [".env", ".env.local"]) {
-    const filePath = path.join(lumenRoot, name);
+    const filePath = path.join(repoRoot, name);
     if (!(await fileExists(filePath))) continue;
-    Object.assign(merged, parseEnvFile(await readFile(filePath, "utf8")));
+    const vars = parseEnvFile(await readFile(filePath, "utf8"));
+    for (const [key, value] of Object.entries(vars)) {
+      if (!env[key]) env[key] = value;
+    }
+    loaded.push(filePath);
   }
-  return merged;
+  return loaded;
 }
 
 export function maskApiKey(apiKey: string): string {
@@ -73,45 +84,25 @@ export function maskApiKey(apiKey: string): string {
 
 export async function resolveLlmConfig(options: ResolveLlmOptions = {}): Promise<LlmConfig> {
   const env = options.env ?? process.env;
+  const repoRoot = options.repoRoot ?? findRepoRoot();
+  const loadedFrom = await loadProjectEnv(repoRoot, env);
 
-  if (env.LLM_API_KEY && env.LLM_BASE_URL) {
-    return {
-      apiKey: env.LLM_API_KEY,
-      baseUrl: env.LLM_BASE_URL,
-      model: env.LLM_MODEL ?? env.MODEL ?? "gpt-4o",
-      source: "process.env (LLM_*)",
-    };
+  const apiKey = env.LLM_API_KEY ?? env.OPENAI_API_KEY ?? "";
+  const baseUrl = env.LLM_BASE_URL ?? env.OPENAI_BASE_URL ?? "";
+  const model = env.LLM_MODEL ?? env.MODEL ?? "gpt-4o";
+
+  if (!apiKey || !baseUrl) {
+    throw new Error(`LLM config not found. Add LLM_* to ${path.join(repoRoot, ".env")}`);
   }
 
-  const lumenRoot = resolveLumenProjectPath(options);
-  const lumenEnv = await loadLumenEnvFiles(lumenRoot);
-  const apiKey =
-    env.LLM_API_KEY ??
-    env.OPENAI_API_KEY ??
-    lumenEnv.OPENAI_API_KEY ??
-    lumenEnv.LLM_API_KEY ??
-    "";
-  const baseUrl =
-    env.LLM_BASE_URL ??
-    env.OPENAI_BASE_URL ??
-    lumenEnv.OPENAI_BASE_URL ??
-    lumenEnv.LLM_BASE_URL ??
-    "";
-  const model =
-    env.LLM_MODEL ?? env.MODEL ?? lumenEnv.LLM_MODEL ?? lumenEnv.MODEL ?? "gpt-4o";
+  const source =
+    loadedFrom.length > 0
+      ? loadedFrom.map((p) => path.basename(p)).join(", ")
+      : env.LLM_API_KEY || env.OPENAI_API_KEY
+        ? "process.env"
+        : ".env";
 
-  if (apiKey && baseUrl) {
-    return {
-      apiKey,
-      baseUrl,
-      model,
-      source: `lumen (${lumenRoot})`,
-    };
-  }
-
-  throw new Error(
-    `LLM config not found. Set LLM_* in .env or configure OPENAI_* in ${lumenRoot}/.env.local`,
-  );
+  return { apiKey, baseUrl, model, source };
 }
 
 export function applyLlmConfigToEnv(config: LlmConfig, env: NodeJS.ProcessEnv = process.env): void {

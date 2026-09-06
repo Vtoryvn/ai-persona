@@ -1,6 +1,10 @@
 import Fastify from "fastify";
-import { missionRequestSchema } from "@persona-system/shared";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { loadProjectEnv, missionRequestSchema } from "@persona-system/shared";
 import { runMission } from "./agent.js";
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
 function authorize(authHeader: string | undefined): boolean {
   const token = process.env.RUNNER_AUTH_TOKEN;
@@ -44,6 +48,7 @@ export async function buildServer() {
 }
 
 async function main() {
+  await loadProjectEnv(repoRoot);
   const app = await buildServer();
   await app.listen({
     port: Number(process.env.PORT ?? 8080),

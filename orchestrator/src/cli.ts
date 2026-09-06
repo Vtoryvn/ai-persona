@@ -2,12 +2,15 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
+import { loadProjectEnv } from "@persona-system/shared";
 import { deployPersonas, syncLlmSecrets } from "./deploy.js";
 import { runEval } from "./eval.js";
 import { writeReport } from "./report.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const defaultPersonasDir = path.join(repoRoot, "personas");
+
+await loadProjectEnv(repoRoot);
 
 const program = new Command();
 program.name("persona").description("Persona evaluation orchestrator");
@@ -52,7 +55,7 @@ program
 
 program
   .command("sync-secrets")
-  .description("Sync LLM secrets to Fly apps from Lumen project env")
+  .description("Sync LLM secrets to Fly apps from local .env")
   .option("--personas <ids>", "Comma-separated persona ids (default: all)")
   .action(async (opts) => {
     const personaIds = opts.personas?.split(",").map((s: string) => s.trim()).filter(Boolean);

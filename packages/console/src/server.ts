@@ -7,11 +7,11 @@ import {
   deletePersonaFile,
   loadPersonaFile,
   loadPersonasDir,
+  loadProjectEnv,
   maskApiKey,
   personaConfigSchema,
   personaFilePath,
   resolveLlmConfig,
-  resolveLumenProjectPath,
   savePersonaFile,
 } from "@persona-system/shared";
 
@@ -38,13 +38,13 @@ export async function buildServer() {
         baseUrl: config.baseUrl,
         model: config.model,
         apiKeyMasked: maskApiKey(config.apiKey),
-        lumenProjectPath: resolveLumenProjectPath({ repoRoot }),
+        envPath: path.join(repoRoot, ".env"),
       };
     } catch (error) {
       return {
         ok: false,
         error: error instanceof Error ? error.message : "unknown error",
-        lumenProjectPath: resolveLumenProjectPath({ repoRoot }),
+        envPath: path.join(repoRoot, ".env"),
       };
     }
   });
@@ -112,6 +112,7 @@ export async function buildServer() {
 }
 
 async function main() {
+  await loadProjectEnv(repoRoot);
   const app = await buildServer();
   const port = Number(process.env.CONSOLE_PORT ?? 8787);
   await app.listen({ port, host: process.env.HOST ?? "0.0.0.0" });
