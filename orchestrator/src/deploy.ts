@@ -76,6 +76,9 @@ export async function deployPersonas(options: {
     let code = await run(["apps", "create", persona.fly.app, "--yes"], options.repoRoot, options.onLog);
     if (code !== 0) options.onLog?.(`(app ${persona.fly.app} may already exist, continuing)`);
 
+    code = await run(["ips", "allocate-v4", "--shared", "-a", persona.fly.app], options.repoRoot, options.onLog);
+    if (code !== 0) options.onLog?.(`(shared IPv4 may already be allocated, continuing)`);
+
     code = await run(
       [
         "deploy",

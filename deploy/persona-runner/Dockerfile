@@ -20,19 +20,21 @@ COPY package.json package-lock.json* ./
 COPY packages/shared/package.json /app/packages/shared/package.json
 COPY deploy/persona-runner/package.json /app/deploy/persona-runner/package.json
 
-RUN npm install --omit=dev --workspace=@persona-system/runner --workspace=@persona-system/shared || npm install
+RUN npm install --workspace=@persona-system/runner --workspace=@persona-system/shared
 
 COPY packages/shared /app/packages/shared
 COPY deploy/persona-runner /app/deploy/persona-runner
 
 RUN npm run build --workspace=@persona-system/shared \
-  && npm run build --workspace=@persona-system/runner
+  && npm run build --workspace=@persona-system/runner \
+  && npm prune --omit=dev
 
 WORKDIR /app/deploy/persona-runner
-RUN chmod +x start.sh
+RUN chmod +x start.sh \
+  && npx --yes chrome-devtools-mcp@latest --version >/dev/null 2>&1 || true
 
 ENV PORT=8080
-ENV MCP_PORT=9223
+ENV CHROME_EXECUTABLE=/usr/bin/google-chrome-stable
 ENV NODE_ENV=production
 
 EXPOSE 8080

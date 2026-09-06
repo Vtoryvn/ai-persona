@@ -1,5 +1,5 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import OpenAI from "openai";
 import type { ChatCompletionMessageParam, ChatCompletionTool } from "openai/resources/chat/completions";
 import {
@@ -65,10 +65,34 @@ function assistantText(content: unknown): string {
   return "";
 }
 
+function buildMcpTransport(mission: MissionRequest): StdioClientTransport {
+  const viewport = mission.browser?.viewport ?? process.env.MCP_VIEWPORT ?? "1280x720";
+  const args = [
+    "--yes",
+    "chrome-devtools-mcp@latest",
+    "--headless",
+    "--isolated",
+    "--viewport",
+    viewport,
+    "--no-usage-statistics",
+    "--chromeArg=--no-sandbox",
+    "--chromeArg=--disable-setuid-sandbox",
+    "--chromeArg=--disable-dev-shm-usage",
+  ];
+  if (process.env.CHROME_EXECUTABLE) {
+    args.push("--executablePath", process.env.CHROME_EXECUTABLE);
+  }
+  return new StdioClientTransport({
+    command: "npx",
+    args,
+    env: { ...process.env } as Record<string, string>,
+    stderr: "inherit",
+  });
+}
+
 export async function runMission(mission: MissionRequest): Promise<MissionResult> {
-  const mcpUrl = process.env.MCP_HTTP_URL ?? "http://127.0.0.1:9223/mcp";
   const mcp = new Client({ name: "persona-runner", version: "0.1.0" });
-  await mcp.connect(new StreamableHTTPClientTransport(new URL(mcpUrl)));
+  await mcp.connect(buildMcpTransport(mission));
 
   const llm = await resolveLlmConfig();
   const openai = new OpenAI({
