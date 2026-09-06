@@ -1,0 +1,31 @@
+# Copy to fly.toml and set app from personas/<id>.yaml fly.app
+app = "persona-first-timer"
+primary_region = "sin"
+
+[build]
+  dockerfile = "deploy/persona-runner/Dockerfile"
+
+[env]
+  PERSONA_ID = "first-timer"
+  MCP_VIEWPORT = "1280x720"
+  PORT = "8080"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    method = "GET"
+    path = "/health"
+
+[[vm]]
+  memory = "2gb"
+  cpu_kind = "shared"
+  cpus = 2
+
+# fly secrets set LLM_API_KEY=... LLM_BASE_URL=https://your-api/v1 LLM_MODEL=... RUNNER_AUTH_TOKEN=...

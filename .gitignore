@@ -8,3 +8,10 @@ venv/
 .pytest_cache/
 worker.lock
 worker.lock-journal
+
+node_modules/
+dist/
+*.tsbuildinfo
+artifacts/evaluations/
+deploy/persona-runner/fly.toml
+C:UsersADMINProjectpersona-system/

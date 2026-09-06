@@ -1,9 +1,16 @@
 # Persona AI Agent System — Design Spec
 
 **Date:** 2026-09-06  
-**Status:** Draft — awaiting approval  
+**Status:** Approved (2026-09-06)  
 **Repo:** persona-system  
 **Workflow:** Superpowers (brainstorming → writing-plans → executing-plans)
+
+
+## Approved decisions (2026-09-06)
+
+- **Architecture:** Approach B — full agent per Fly.io VM (Chrome + MCP + LLM loop)
+- **LLM:** OpenAI-compatible API via `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`
+- **Product auth:** Simple username/password in mission payload (`--username` / `--password` on orchestrator)
 
 ---
 
@@ -24,10 +31,10 @@ Build a system where **3–5 distinct AI personas** can independently evaluate a
 | Component | State |
 | --- | --- |
 | Superpowers skills/hooks | ✅ Installed in `.cursor/` |
-| Persona definitions | ❌ Not started |
-| Fly.io deployment | ❌ Not started |
-| Chrome DevTools MCP | ❌ Not started |
-| Orchestrator | ❌ Not started |
+| Persona definitions | ✅ `personas/*.yaml` |
+| Fly.io deployment | ✅ `deploy/persona-runner` |
+| Chrome DevTools MCP | ✅ via `chrome-devtools-mcp` in runner |
+| Orchestrator | ✅ `orchestrator/` CLI |
 
 Worker identity: `persona-system` (see `AGENTS.md`).
 

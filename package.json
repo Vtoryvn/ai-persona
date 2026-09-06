@@ -1,0 +1,17 @@
+{
+  "name": "persona-system",
+  "private": true,
+  "workspaces": [
+    "packages/shared",
+    "orchestrator",
+    "deploy/persona-runner"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "persona": "npm run start -w orchestrator --"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

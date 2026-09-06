@@ -1,0 +1,23 @@
+{
+  "name": "@persona-system/orchestrator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "persona": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/cli.js",
+    "dev": "tsx src/cli.ts"
+  },
+  "dependencies": {
+    "@persona-system/shared": "*",
+    "commander": "^13.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}
