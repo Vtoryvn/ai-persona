@@ -2,9 +2,6 @@
 app = "persona-first-timer"
 primary_region = "sin"
 
-[build]
-  dockerfile = "deploy/persona-runner/Dockerfile"
-
 [env]
   PERSONA_ID = "first-timer"
   MCP_VIEWPORT = "1280x720"
