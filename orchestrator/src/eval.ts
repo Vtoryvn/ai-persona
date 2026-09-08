@@ -130,6 +130,33 @@ async function dispatchMission(
   }
 }
 
+async function runPersonaEval(
+  persona: PersonaConfig,
+  options: EvalOptions,
+  runDir: string,
+): Promise<PersonaEvalResult> {
+  options.onLog?.(`→ ${persona.name} (${persona.id})...`);
+  options.onEvent?.({
+    type: "status",
+    at: new Date().toISOString(),
+    personaId: persona.id,
+    message: `Bắt đầu ${persona.name}`,
+  });
+
+  const result = await dispatchMission(persona, options);
+  options.onLog?.(
+    result.ok ? `✓ ${persona.id} done` : `✗ ${persona.id}: ${result.error ?? "failed"}`,
+  );
+
+  await writeFile(
+    path.join(runDir, `${persona.id}.json`),
+    JSON.stringify(result.ok ? result.result : { error: result.error }, null, 2),
+    "utf8",
+  );
+
+  return result;
+}
+
 export async function runEval(options: EvalOptions): Promise<{
   runDir: string;
   results: PersonaEvalResult[];
@@ -148,27 +175,9 @@ export async function runEval(options: EvalOptions): Promise<{
   const runDir = options.outDir ?? path.join("artifacts", "evaluations", stamp);
   await mkdir(runDir, { recursive: true });
 
-  const results: PersonaEvalResult[] = [];
-  for (const persona of selected) {
-    options.onLog?.(`→ ${persona.name} (${persona.id})...`);
-    options.onEvent?.({
-      type: "status",
-      at: new Date().toISOString(),
-      personaId: persona.id,
-      message: `Bắt đầu ${persona.name}`,
-    });
-    const result = await dispatchMission(persona, options);
-    results.push(result);
-    options.onLog?.(
-      result.ok ? `✓ ${persona.id} done` : `✗ ${persona.id}: ${result.error ?? "failed"}`,
-    );
-
-    await writeFile(
-      path.join(runDir, `${persona.id}.json`),
-      JSON.stringify(result.ok ? result.result : { error: result.error }, null, 2),
-      "utf8",
-    );
-  }
+  const results = await Promise.all(
+    selected.map((persona) => runPersonaEval(persona, options, runDir)),
+  );
 
   return { runDir, results };
 }

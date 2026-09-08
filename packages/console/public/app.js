@@ -13,6 +13,10 @@ let isNew = false;
 let allPersonas = [];
 let activeJobId = null;
 let pollTimer = null;
+let jobStream = null;
+let expandedPersonaId = null;
+const personaCards = new Map();
+const personaEvents = new Map();
 
 const fields = {
   id: document.getElementById("field-id"),
@@ -92,7 +96,7 @@ function showForm(show) {
   emptyEl.classList.toggle("hidden", show);
 }
 
-function renderCheckboxes(containerId, prefix) {
+function renderCheckboxes(containerId) {
   const container = document.getElementById(containerId);
   container.innerHTML = "";
   for (const p of allPersonas) {
@@ -112,25 +116,258 @@ function setJobBadge(status) {
   jobBadge.className = `badge ${status}`;
 }
 
-async function pollJob(jobId) {
+function formatEvent(event) {
+  if (event.type === "tool") return `⚙ ${event.name || event.message || "tool"}`;
+  if (event.type === "thought") return event.text || "";
+  if (event.type === "status") return event.message || "";
+  if (event.type === "result") return "✓ Hoàn thành đánh giá";
+  if (event.type === "error") return `✗ ${event.message || "Lỗi"}`;
+  return event.message || event.type;
+}
+
+function renderEventList(listEl, events) {
+  listEl.innerHTML = "";
+  const recent = (events || []).filter((e) => e.type !== "screenshot").slice(-60);
+  for (const event of recent) {
+    const li = document.createElement("li");
+    li.className = `event ${event.type}`;
+    li.textContent = formatEvent(event);
+    listEl.appendChild(li);
+  }
+  listEl.scrollTop = listEl.scrollHeight;
+}
+
+function setStreamImage(imgEl, emptyEl, mime, data) {
+  if (!data || data === "[omitted]") return;
+  imgEl.src = `data:${mime};base64,${data}`;
+  imgEl.classList.remove("hidden");
+  emptyEl.classList.add("hidden");
+}
+
+function updateCardStatus(card, status) {
+  card.dataset.status = status;
+  const badge = card.querySelector(".persona-card-status");
+  if (!badge) return;
+  badge.textContent = status;
+  badge.className = `persona-card-status ${status}`;
+}
+
+function createPersonaCard(personaId, personaName) {
+  const card = document.createElement("button");
+  card.type = "button";
+  card.className = "persona-card";
+  card.dataset.personaId = personaId;
+  card.dataset.status = "pending";
+  card.innerHTML = `
+    <header class="persona-card-head">
+      <strong class="persona-card-name">${personaName || personaId}</strong>
+      <span class="persona-card-status pending">pending</span>
+    </header>
+    <div class="persona-card-screen">
+      <img alt="Stream ${personaName || personaId}" class="persona-card-stream hidden" />
+      <div class="persona-card-empty">Đang chờ VM...</div>
+    </div>
+    <p class="persona-card-action">Chưa có hành động</p>
+  `;
+  card.addEventListener("click", () => openPersonaDetail(personaId));
+  personaCards.set(personaId, card);
+  personaEvents.set(personaId, []);
+  return card;
+}
+
+function buildPersonaGrid(personaIds) {
+  const grid = document.getElementById("persona-grid");
+  grid.innerHTML = "";
+  personaCards.clear();
+  personaEvents.clear();
+  expandedPersonaId = null;
+
+  for (const personaId of personaIds) {
+    const persona = allPersonas.find((p) => p.id === personaId);
+    grid.appendChild(createPersonaCard(personaId, persona?.name || personaId));
+  }
+
+  document.getElementById("persona-detail").classList.add("hidden");
+  document.getElementById("session-grid-close").classList.add("hidden");
+  grid.classList.remove("hidden");
+}
+
+function updateCardAction(personaId, text) {
+  const card = personaCards.get(personaId);
+  if (!card || !text) return;
+  const actionEl = card.querySelector(".persona-card-action");
+  actionEl.textContent = text;
+  actionEl.classList.toggle("live", card.dataset.status === "running");
+}
+
+function updateCardFrame(personaId, mime, data) {
+  const card = personaCards.get(personaId);
+  if (!card) return;
+  const img = card.querySelector(".persona-card-stream");
+  const empty = card.querySelector(".persona-card-empty");
+  setStreamImage(img, empty, mime, data);
+}
+
+function appendPersonaEvent(personaId, event) {
+  if (event.type === "screenshot") return;
+  const events = personaEvents.get(personaId) || [];
+  events.push(event);
+  personaEvents.set(personaId, events);
+
+  const action = formatEvent(event);
+  updateCardAction(personaId, action);
+
+  if (expandedPersonaId === personaId) {
+    renderDetailFromState(personaId);
+  }
+}
+
+function renderDetailFromState(personaId) {
+  const card = personaCards.get(personaId);
+  const sessionEvents = personaEvents.get(personaId) || [];
+  const img = document.getElementById("detail-stream");
+  const empty = document.getElementById("detail-stream-empty");
+  const cardImg = card?.querySelector(".persona-card-stream");
+
+  document.getElementById("detail-persona-name").textContent =
+    card?.querySelector(".persona-card-name")?.textContent || personaId;
+  document.getElementById("detail-persona-meta").textContent =
+    card?.dataset.status === "running" ? "Agent đang chạy" : card?.dataset.status || "";
+
+  if (cardImg?.src) {
+    img.src = cardImg.src;
+    img.classList.remove("hidden");
+    empty.classList.add("hidden");
+  }
+
+  const lastThought = [...sessionEvents].reverse().find((e) => e.type === "thought" && e.text);
+  document.getElementById("detail-thought").textContent = lastThought?.text || "";
+  renderEventList(document.getElementById("detail-events"), sessionEvents);
+}
+
+function openPersonaDetail(personaId) {
+  expandedPersonaId = personaId;
+  document.getElementById("persona-grid").classList.add("hidden");
+  document.getElementById("persona-detail").classList.remove("hidden");
+  document.getElementById("session-grid-close").classList.remove("hidden");
+  renderDetailFromState(personaId);
+}
+
+function closePersonaDetail() {
+  expandedPersonaId = null;
+  document.getElementById("persona-detail").classList.add("hidden");
+  document.getElementById("persona-grid").classList.remove("hidden");
+  document.getElementById("session-grid-close").classList.add("hidden");
+}
+
+function handleStreamMessage(message) {
+  if (message.type === "snapshot" && message.job?.sessions) {
+    for (const [personaId, session] of Object.entries(message.job.sessions)) {
+      const card = personaCards.get(personaId);
+      if (!card) continue;
+      updateCardStatus(card, session.status);
+      if (session.lastAction) updateCardAction(personaId, session.lastAction);
+      if (session.screenshot?.data && session.screenshot.data !== "[omitted]") {
+        updateCardFrame(personaId, session.screenshot.mime, session.screenshot.data);
+      }
+      if (session.events?.length) {
+        personaEvents.set(
+          personaId,
+          session.events.filter((e) => e.type !== "screenshot"),
+        );
+      }
+    }
+    if (expandedPersonaId) renderDetailFromState(expandedPersonaId);
+    return;
+  }
+
+  if (message.type === "frame") {
+    updateCardFrame(message.personaId, message.mime, message.data);
+    if (expandedPersonaId === message.personaId) {
+      setStreamImage(
+        document.getElementById("detail-stream"),
+        document.getElementById("detail-stream-empty"),
+        message.mime,
+        message.data,
+      );
+    }
+    return;
+  }
+
+  if (message.type === "event") {
+    appendPersonaEvent(message.personaId, message.event);
+    return;
+  }
+
+  if (message.type === "persona") {
+    const card = personaCards.get(message.personaId);
+    if (card) updateCardStatus(card, message.status);
+    if (message.error) updateCardAction(message.personaId, `✗ ${message.error}`);
+    if (expandedPersonaId === message.personaId) {
+      document.getElementById("detail-persona-meta").textContent = message.error || message.status;
+    }
+    return;
+  }
+
+  if (message.type === "job") {
+    if (message.status) setJobBadge(message.status);
+    return;
+  }
+
+  if (message.type === "log" && message.line) {
+    jobLog.textContent += (jobLog.textContent.endsWith("\n") || !jobLog.textContent ? "" : "\n") + message.line;
+    jobLog.scrollTop = jobLog.scrollHeight;
+  }
+}
+
+function connectJobStream(jobId) {
+  if (jobStream) {
+    jobStream.close();
+    jobStream = null;
+  }
+
+  jobStream = new EventSource(`/api/ops/jobs/${jobId}/stream`);
+  jobStream.onmessage = (evt) => {
+    try {
+      handleStreamMessage(JSON.parse(evt.data));
+    } catch {
+      // ignore malformed events
+    }
+  };
+  jobStream.onerror = () => {
+    jobStream?.close();
+    jobStream = null;
+  };
+}
+
+async function pollJob(jobId, options = {}) {
+  const { useStream = false, personaIds = [] } = options;
   activeJobId = jobId;
   setJobBadge("running");
   if (pollTimer) clearInterval(pollTimer);
 
+  if (useStream) {
+    buildPersonaGrid(personaIds);
+    document.getElementById("session-view").classList.remove("hidden");
+    connectJobStream(jobId);
+  }
+
   const tick = async () => {
     const job = await api(`/api/ops/jobs/${jobId}`);
-    jobLog.textContent = job.logs.join("\n") || "Đang chạy...";
+    if (!useStream) {
+      jobLog.textContent = job.logs.join("\n") || "Đang chạy...";
+    } else if (!jobLog.textContent || jobLog.textContent === "Chưa có tác vụ.") {
+      jobLog.textContent = job.logs.join("\n") || "Đang chạy...";
+    }
     jobLog.scrollTop = jobLog.scrollHeight;
     setJobBadge(job.status);
-
-    if (job.type === "eval") {
-      await updateSession(jobId, job);
-    }
 
     if (job.status === "completed" || job.status === "failed") {
       clearInterval(pollTimer);
       pollTimer = null;
       activeJobId = null;
+      jobStream?.close();
+      jobStream = null;
 
       if (job.type === "health" && job.result?.results) {
         showHealthResults(job.result.results);
@@ -139,59 +376,20 @@ async function pollJob(jobId) {
   };
 
   await tick();
-  pollTimer = setInterval(tick, 1200);
+  pollTimer = setInterval(tick, 3000);
 }
 
-function renderSessionEvents(events) {
-  const list = document.getElementById("session-events");
-  list.innerHTML = "";
-  const recent = (events || []).filter((e) => e.type !== "screenshot").slice(-40);
-  for (const event of recent) {
-    const li = document.createElement("li");
-    li.className = `event ${event.type}`;
-    if (event.type === "tool") li.textContent = `⚙ ${event.name || event.message}`;
-    else if (event.type === "thought") li.textContent = event.text || "";
-    else if (event.type === "status") li.textContent = event.message || "";
-    else if (event.type === "result") li.textContent = "✓ Xong";
-    else if (event.type === "error") li.textContent = `✗ ${event.message}`;
-    else li.textContent = event.message || event.type;
-    list.appendChild(li);
-  }
-  list.scrollTop = list.scrollHeight;
-}
-
-async function updateSession(jobId, job) {
-  const view = document.getElementById("session-view");
-  view.classList.remove("hidden");
-  renderSessionEvents(job.events);
-
-  const screen = await api(`/api/ops/jobs/${jobId}/screen`);
-  const meta = document.getElementById("computer-meta");
-  const thought = document.getElementById("session-thought");
-  const img = document.getElementById("computer-shot");
-  const empty = document.getElementById("computer-empty");
-
-  const bits = [];
-  if (screen.session?.personaId) bits.push(screen.session.personaId);
-  if (screen.session?.tool) bits.push(screen.session.tool);
-  meta.textContent = bits.join(" · ") || job.status;
-
-  thought.textContent = screen.session?.thought || "";
-
-  if (screen.session?.screenshot?.data && screen.session.screenshot.data !== "[omitted]") {
-    img.src = `data:${screen.session.screenshot.mime};base64,${screen.session.screenshot.data}`;
-    img.classList.remove("hidden");
-    empty.classList.add("hidden");
-  }
-}
-
-async function startJob(path, body) {
+async function startJob(path, body, options = {}) {
   if (activeJobId) {
     if (!confirm("Đang có job chạy. Bắt đầu job mới?")) return null;
   }
-  const { jobId } = await api(path, { method: "POST", body: JSON.stringify(body ?? {}) });
-  await pollJob(jobId);
-  return jobId;
+  jobLog.textContent = "";
+  const response = await api(path, { method: "POST", body: JSON.stringify(body ?? {}) });
+  await pollJob(response.jobId, {
+    useStream: options.useStream,
+    personaIds: response.personaIds || body?.personaIds || [],
+  });
+  return response.jobId;
 }
 
 function showHealthResults(results) {
@@ -230,8 +428,8 @@ async function refreshList(activeId = selectedId) {
     li.appendChild(btn);
     listEl.appendChild(li);
   }
-  renderCheckboxes("ops-persona-checks", "ops");
-  renderCheckboxes("eval-persona-checks", "eval");
+  renderCheckboxes("ops-persona-checks");
+  renderCheckboxes("eval-persona-checks");
 }
 
 async function selectPersona(id) {
@@ -319,16 +517,18 @@ document.getElementById("ops-health").addEventListener("click", () => {
 document.getElementById("eval-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   showView("eval");
-  document.getElementById("session-view").classList.remove("hidden");
-  document.getElementById("computer-empty").classList.remove("hidden");
-  document.getElementById("computer-shot").classList.add("hidden");
-  document.getElementById("session-events").innerHTML = "";
-  document.getElementById("session-thought").textContent = "";
-  await startJob("/api/ops/eval", {
-    prompt: document.getElementById("eval-prompt").value.trim(),
-    personaIds: getCheckedIds("eval-persona-checks"),
-  });
+  const personaIds = getCheckedIds("eval-persona-checks");
+  await startJob(
+    "/api/ops/eval",
+    {
+      prompt: document.getElementById("eval-prompt").value.trim(),
+      personaIds,
+    },
+    { useStream: true, personaIds },
+  );
 });
+
+document.getElementById("session-grid-close").addEventListener("click", closePersonaDetail);
 
 newBtn.addEventListener("click", createPersona);
 
