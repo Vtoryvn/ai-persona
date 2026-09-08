@@ -8,7 +8,7 @@ import {
   syncLlmSecrets,
   writeReport,
 } from "@persona-system/orchestrator";
-import { loadPersonasDir } from "@persona-system/shared";
+import { loadPersonasDir, resolveNovncUrl } from "@persona-system/shared";
 import {
   createJob,
   getJob,
@@ -233,7 +233,11 @@ export function registerOpsRoutes(app: FastifyInstance, ctx: OpsContext) {
     );
     initPersonaSessions(
       job,
-      selected.map((p) => ({ id: p.id, name: p.name })),
+      selected.map((p) => ({
+        id: p.id,
+        name: p.name,
+        novncUrl: resolveNovncUrl(p),
+      })),
     );
 
     void runJob(job, async (log) => {
@@ -264,6 +268,10 @@ export function registerOpsRoutes(app: FastifyInstance, ctx: OpsContext) {
       return { runDir, reportPath, results, failed: results.filter((r: PersonaEvalResult) => !r.ok).length };
     });
 
-    return reply.code(202).send({ jobId: job.id, personaIds: selected.map((p) => p.id) });
+    return reply.code(202).send({
+      jobId: job.id,
+      personaIds: selected.map((p) => p.id),
+      novncUrls: Object.fromEntries(selected.map((p) => [p.id, resolveNovncUrl(p)])),
+    });
   });
 }

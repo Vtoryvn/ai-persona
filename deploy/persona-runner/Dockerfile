@@ -1,10 +1,12 @@
 FROM node:22-bookworm
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl gnupg wget \
+    ca-certificates curl gnupg wget git \
+    xvfb openbox x11vnc \
     fonts-liberation libasound2 libatk-bridge2.0-0 libatk1.0-0 libcups2 \
     libdbus-1-3 libdrm2 libgbm1 libgtk-3-0 libnspr4 libnss3 libx11-xcb1 \
     libxcomposite1 libxdamage1 libxrandr2 xdg-utils \
+  && git clone --depth 1 https://github.com/novnc/noVNC.git /opt/noVNC \
   && rm -rf /var/lib/apt/lists/*
 
 RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg \
@@ -30,13 +32,14 @@ RUN npm run build --workspace=@persona-system/shared \
   && npm prune --omit=dev
 
 WORKDIR /app/deploy/persona-runner
-RUN chmod +x start.sh \
-  && npx --yes chrome-devtools-mcp@latest --version >/dev/null 2>&1 || true
+RUN chmod +x start.sh
 
 ENV PORT=8080
+ENV NOVNC_PORT=6080
+ENV CHROME_DEBUG_PORT=9222
 ENV CHROME_EXECUTABLE=/usr/bin/google-chrome-stable
 ENV NODE_ENV=production
 
-EXPOSE 8080
+EXPOSE 8080 6080
 
 CMD ["./start.sh"]

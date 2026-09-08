@@ -69,6 +69,24 @@ async function readSse(
   return lastResult;
 }
 
+async function waitForRunner(url: string, timeoutMs = Number(process.env.RUNNER_READY_TIMEOUT_MS ?? 180_000)) {
+  const healthUrl = `${url.replace(/\/$/, "")}/health`;
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const response = await fetch(healthUrl, { signal: AbortSignal.timeout(8000) });
+      if (response.ok) {
+        const payload = (await response.json()) as { chrome_ready?: boolean; ok?: boolean };
+        if (payload.chrome_ready === true || payload.chrome_ready === undefined) return;
+      }
+    } catch {
+      // machine may still be booting
+    }
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+  }
+  throw new Error(`Runner not ready: ${healthUrl}`);
+}
+
 async function dispatchMission(
   persona: PersonaConfig,
   options: EvalOptions,
@@ -95,6 +113,7 @@ async function dispatchMission(
   };
 
   try {
+    await waitForRunner(url);
     const response = await fetch(url, {
       method: "POST",
       headers: authHeaders(),

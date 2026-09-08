@@ -351,11 +351,18 @@ textarea {
   justify-content: center;
 }
 
-.persona-card-stream {
+.persona-card-stream,
+.detail-novnc,
+.persona-card-novnc {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  border: 0;
   background: #000;
+}
+
+.persona-card-screen iframe.hidden,
+.detail-novnc.hidden {
+  display: none;
 }
 
 .persona-card-empty {
@@ -410,6 +417,13 @@ textarea {
   background: var(--panel-2);
 }
 
+.computer-screen img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
 .computer-screen {
   flex: 1;
   min-height: 320px;
@@ -417,13 +431,7 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.computer-screen img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  background: #000;
+  position: relative;
 }
 
 .computer-empty {

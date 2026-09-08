@@ -17,6 +17,7 @@ let jobStream = null;
 let expandedPersonaId = null;
 const personaCards = new Map();
 const personaEvents = new Map();
+const personaNovncUrls = new Map();
 
 const fields = {
   id: document.getElementById("field-id"),
@@ -137,11 +138,28 @@ function renderEventList(listEl, events) {
   listEl.scrollTop = listEl.scrollHeight;
 }
 
-function setStreamImage(imgEl, emptyEl, mime, data) {
-  if (!data || data === "[omitted]") return;
-  imgEl.src = `data:${mime};base64,${data}`;
-  imgEl.classList.remove("hidden");
-  emptyEl.classList.add("hidden");
+function mountNovnc(container, novncUrl, active) {
+  const empty = container.querySelector(".persona-card-empty, .computer-empty");
+  let iframe = container.querySelector("iframe");
+
+  if (!active || !novncUrl) {
+    if (iframe) iframe.remove();
+    empty?.classList.remove("hidden");
+    return;
+  }
+
+  if (!iframe) {
+    iframe = document.createElement("iframe");
+    iframe.className = container.classList.contains("computer-screen")
+      ? "detail-novnc"
+      : "persona-card-novnc";
+    iframe.title = "VM Live View";
+    container.appendChild(iframe);
+  }
+
+  if (iframe.src !== novncUrl) iframe.src = novncUrl;
+  iframe.classList.remove("hidden");
+  empty?.classList.add("hidden");
 }
 
 function updateCardStatus(card, status) {
@@ -150,9 +168,16 @@ function updateCardStatus(card, status) {
   if (!badge) return;
   badge.textContent = status;
   badge.className = `persona-card-status ${status}`;
+
+  const personaId = card.dataset.personaId;
+  const novncUrl = personaNovncUrls.get(personaId);
+  const screen = card.querySelector(".persona-card-screen");
+  const showStream = Boolean(novncUrl) && status !== "failed";
+  mountNovnc(screen, novncUrl, showStream);
 }
 
-function createPersonaCard(personaId, personaName) {
+function createPersonaCard(personaId, personaName, novncUrl) {
+  if (novncUrl) personaNovncUrls.set(personaId, novncUrl);
   const card = document.createElement("button");
   card.type = "button";
   card.className = "persona-card";
@@ -164,8 +189,7 @@ function createPersonaCard(personaId, personaName) {
       <span class="persona-card-status pending">pending</span>
     </header>
     <div class="persona-card-screen">
-      <img alt="Stream ${personaName || personaId}" class="persona-card-stream hidden" />
-      <div class="persona-card-empty">Đang chờ VM...</div>
+      <div class="persona-card-empty">Đang khởi động VM / noVNC...</div>
     </div>
     <p class="persona-card-action">Chưa có hành động</p>
   `;
@@ -175,16 +199,19 @@ function createPersonaCard(personaId, personaName) {
   return card;
 }
 
-function buildPersonaGrid(personaIds) {
+function buildPersonaGrid(personaIds, novncUrls = {}) {
   const grid = document.getElementById("persona-grid");
   grid.innerHTML = "";
   personaCards.clear();
   personaEvents.clear();
+  personaNovncUrls.clear();
   expandedPersonaId = null;
 
   for (const personaId of personaIds) {
     const persona = allPersonas.find((p) => p.id === personaId);
-    grid.appendChild(createPersonaCard(personaId, persona?.name || personaId));
+    grid.appendChild(
+      createPersonaCard(personaId, persona?.name || personaId, novncUrls[personaId]),
+    );
   }
 
   document.getElementById("persona-detail").classList.add("hidden");
@@ -198,14 +225,6 @@ function updateCardAction(personaId, text) {
   const actionEl = card.querySelector(".persona-card-action");
   actionEl.textContent = text;
   actionEl.classList.toggle("live", card.dataset.status === "running");
-}
-
-function updateCardFrame(personaId, mime, data) {
-  const card = personaCards.get(personaId);
-  if (!card) return;
-  const img = card.querySelector(".persona-card-stream");
-  const empty = card.querySelector(".persona-card-empty");
-  setStreamImage(img, empty, mime, data);
 }
 
 function appendPersonaEvent(personaId, event) {
@@ -225,20 +244,16 @@ function appendPersonaEvent(personaId, event) {
 function renderDetailFromState(personaId) {
   const card = personaCards.get(personaId);
   const sessionEvents = personaEvents.get(personaId) || [];
-  const img = document.getElementById("detail-stream");
-  const empty = document.getElementById("detail-stream-empty");
-  const cardImg = card?.querySelector(".persona-card-stream");
+  const novncUrl = personaNovncUrls.get(personaId);
+  const status = card?.dataset.status || "pending";
+  const detailScreen = document.querySelector("#persona-detail .computer-screen");
 
   document.getElementById("detail-persona-name").textContent =
     card?.querySelector(".persona-card-name")?.textContent || personaId;
   document.getElementById("detail-persona-meta").textContent =
-    card?.dataset.status === "running" ? "Agent đang chạy" : card?.dataset.status || "";
+    status === "running" ? "Live desktop qua noVNC" : status;
 
-  if (cardImg?.src) {
-    img.src = cardImg.src;
-    img.classList.remove("hidden");
-    empty.classList.add("hidden");
-  }
+  mountNovnc(detailScreen, novncUrl, Boolean(novncUrl) && status !== "failed");
 
   const lastThought = [...sessionEvents].reverse().find((e) => e.type === "thought" && e.text);
   document.getElementById("detail-thought").textContent = lastThought?.text || "";
@@ -266,10 +281,8 @@ function handleStreamMessage(message) {
       const card = personaCards.get(personaId);
       if (!card) continue;
       updateCardStatus(card, session.status);
+      if (session.novncUrl) personaNovncUrls.set(personaId, session.novncUrl);
       if (session.lastAction) updateCardAction(personaId, session.lastAction);
-      if (session.screenshot?.data && session.screenshot.data !== "[omitted]") {
-        updateCardFrame(personaId, session.screenshot.mime, session.screenshot.data);
-      }
       if (session.events?.length) {
         personaEvents.set(
           personaId,
@@ -278,19 +291,6 @@ function handleStreamMessage(message) {
       }
     }
     if (expandedPersonaId) renderDetailFromState(expandedPersonaId);
-    return;
-  }
-
-  if (message.type === "frame") {
-    updateCardFrame(message.personaId, message.mime, message.data);
-    if (expandedPersonaId === message.personaId) {
-      setStreamImage(
-        document.getElementById("detail-stream"),
-        document.getElementById("detail-stream-empty"),
-        message.mime,
-        message.data,
-      );
-    }
     return;
   }
 
@@ -341,13 +341,13 @@ function connectJobStream(jobId) {
 }
 
 async function pollJob(jobId, options = {}) {
-  const { useStream = false, personaIds = [] } = options;
+  const { useStream = false, personaIds = [], novncUrls = {} } = options;
   activeJobId = jobId;
   setJobBadge("running");
   if (pollTimer) clearInterval(pollTimer);
 
   if (useStream) {
-    buildPersonaGrid(personaIds);
+    buildPersonaGrid(personaIds, novncUrls);
     document.getElementById("session-view").classList.remove("hidden");
     connectJobStream(jobId);
   }
@@ -388,6 +388,7 @@ async function startJob(path, body, options = {}) {
   await pollJob(response.jobId, {
     useStream: options.useStream,
     personaIds: response.personaIds || body?.personaIds || [],
+    novncUrls: response.novncUrls || options.novncUrls || {},
   });
   return response.jobId;
 }

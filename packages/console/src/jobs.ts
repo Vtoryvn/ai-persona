@@ -15,6 +15,7 @@ export interface SessionFrame {
 export interface PersonaSession {
   personaId: string;
   personaName?: string;
+  novncUrl?: string;
   status: PersonaSessionStatus;
   tool?: string;
   thought?: string;
@@ -124,7 +125,7 @@ export function publicJob(job: Job): Omit<Job, "events" | "sessions"> & {
 
 export function initPersonaSessions(
   job: Job,
-  personas: Array<{ id: string; name: string }>,
+  personas: Array<{ id: string; name: string; novncUrl?: string }>,
 ) {
   job.personaIds = personas.map((p) => p.id);
   job.sessions = {};
@@ -132,6 +133,7 @@ export function initPersonaSessions(
     job.sessions[persona.id] = {
       personaId: persona.id,
       personaName: persona.name,
+      novncUrl: persona.novncUrl,
       status: "pending",
       events: [],
     };

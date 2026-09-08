@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import OpenAI from "openai";
@@ -10,8 +11,11 @@ import {
   type MissionResult,
 } from "@persona-system/shared";
 
+const require = createRequire(import.meta.url);
 const MAX_TOOL_ROUNDS = 32;
 const SCREENSHOT_TOOLS = /screenshot|snapshot|navigate|click|fill|type|press|scroll|wait/i;
+const CHROME_DEBUG_URL =
+  process.env.CHROME_DEBUG_URL ?? `http://127.0.0.1:${process.env.CHROME_DEBUG_PORT ?? "9222"}`;
 
 export type MissionEventHandler = (event: MissionEvent) => void | Promise<void>;
 
@@ -101,7 +105,31 @@ async function callMcpTool(client: Client, name: string, args: Record<string, un
   return parseToolResult(result);
 }
 
-function buildMcpTransport(mission: MissionRequest): StdioClientTransport {
+async function isChromeDebugReady(): Promise<boolean> {
+  try {
+    const res = await fetch(`${CHROME_DEBUG_URL}/json/version`, {
+      signal: AbortSignal.timeout(2000),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function waitForChrome(timeoutMs = Number(process.env.CHROME_READY_TIMEOUT_MS ?? 120_000)) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (await isChromeDebugReady()) return;
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  throw new Error(`Chrome not ready at ${CHROME_DEBUG_URL}`);
+}
+
+function resolveMcpBin(): string {
+  return require.resolve("chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js");
+}
+
+function buildHeadlessTransport(mission: MissionRequest): StdioClientTransport {
   const viewport = mission.browser?.viewport ?? process.env.MCP_VIEWPORT ?? "1280x720";
   const args = [
     "--yes",
@@ -127,6 +155,45 @@ function buildMcpTransport(mission: MissionRequest): StdioClientTransport {
     env: { ...process.env } as Record<string, string>,
     stderr: "inherit",
   });
+}
+
+function buildBrowserUrlTransport(): StdioClientTransport {
+  const mcpBin = resolveMcpBin();
+  return new StdioClientTransport({
+    command: process.execPath,
+    args: [
+      mcpBin,
+      "--browser-url",
+      CHROME_DEBUG_URL,
+      "--no-usage-statistics",
+      "--experimental-vision",
+      "--no-memory-debugging",
+      "--screenshot-format",
+      "jpeg",
+      "--screenshot-quality",
+      "80",
+      "--screenshot-max-width",
+      "1280",
+    ],
+    env: {
+      ...process.env,
+      CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: "1",
+      CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS: "1",
+    } as Record<string, string>,
+    stderr: "inherit",
+  });
+}
+
+async function buildMcpTransport(mission: MissionRequest): Promise<StdioClientTransport> {
+  const headed = await isChromeDebugReady();
+  if (headed) {
+    await waitForChrome(10_000);
+    return buildBrowserUrlTransport();
+  }
+  if (process.env.PERSONA_REQUIRE_HEADED === "1") {
+    throw new Error("Headed Chrome required but remote debugging is unavailable");
+  }
+  return buildHeadlessTransport(mission);
 }
 
 function findScreenshotTool(tools: ChatCompletionTool[]): string | undefined {
@@ -175,7 +242,7 @@ export async function runMission(
   await emit(onEvent, { type: "status", personaId: mission.persona_id, message: "Khởi động Chrome trên máy ảo..." });
 
   const mcp = new Client({ name: "persona-runner", version: "0.1.0" });
-  await mcp.connect(buildMcpTransport(mission));
+  await mcp.connect(await buildMcpTransport(mission));
 
   const llm = await resolveLlmConfig();
   const openai = new OpenAI({
@@ -284,3 +351,5 @@ export async function runMission(
     await mcp.close();
   }
 }
+
+export { isChromeDebugReady, waitForChrome };
