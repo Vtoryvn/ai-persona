@@ -346,14 +346,14 @@ textarea {
   aspect-ratio: 16 / 10;
   background: #111;
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  overflow: hidden;
 }
 
 .persona-card-stream,
 .detail-novnc,
 .persona-card-novnc {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   border: 0;
@@ -365,11 +365,25 @@ textarea {
   display: none;
 }
 
-.persona-card-empty {
+.persona-card-empty,
+.computer-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: var(--muted);
-  font-size: 0.78rem;
   padding: 0.75rem;
   text-align: center;
+  z-index: 1;
+}
+
+.persona-card-empty {
+  font-size: 0.78rem;
+}
+
+.computer-empty {
+  font-size: 0.9rem;
 }
 
 .persona-card-action {
@@ -428,15 +442,8 @@ textarea {
   flex: 1;
   min-height: 320px;
   background: #111;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   position: relative;
-}
-
-.computer-empty {
-  color: var(--muted);
-  font-size: 0.9rem;
+  overflow: hidden;
 }
 
 .thought {

@@ -138,7 +138,7 @@ function renderEventList(listEl, events) {
   listEl.scrollTop = listEl.scrollHeight;
 }
 
-function mountNovnc(container, novncUrl, active) {
+function mountNovnc(container, novncUrl, active, { reload = false } = {}) {
   const empty = container.querySelector(".persona-card-empty, .computer-empty");
   let iframe = container.querySelector("iframe");
 
@@ -154,15 +154,26 @@ function mountNovnc(container, novncUrl, active) {
       ? "detail-novnc"
       : "persona-card-novnc";
     iframe.title = "VM Live View";
+    iframe.allow = "fullscreen";
+    iframe.loading = "eager";
     container.appendChild(iframe);
   }
 
-  if (iframe.src !== novncUrl) iframe.src = novncUrl;
+  const nextSrc = reload ? `${novncUrl}${novncUrl.includes("?") ? "&" : "?"}_ts=${Date.now()}` : novncUrl;
+  if (reload || iframe.dataset.novncUrl !== novncUrl || !iframe.src) {
+    iframe.src = nextSrc;
+    iframe.dataset.novncUrl = novncUrl;
+  }
   iframe.classList.remove("hidden");
   empty?.classList.add("hidden");
 }
 
-function updateCardStatus(card, status) {
+function shouldShowNovnc(status) {
+  return status === "running" || status === "completed";
+}
+
+function updateCardStatus(card, status, { reloadNovnc = false } = {}) {
+  const previous = card.dataset.status;
   card.dataset.status = status;
   const badge = card.querySelector(".persona-card-status");
   if (!badge) return;
@@ -172,8 +183,20 @@ function updateCardStatus(card, status) {
   const personaId = card.dataset.personaId;
   const novncUrl = personaNovncUrls.get(personaId);
   const screen = card.querySelector(".persona-card-screen");
-  const showStream = Boolean(novncUrl) && status !== "failed";
-  mountNovnc(screen, novncUrl, showStream);
+  const empty = screen?.querySelector(".persona-card-empty");
+  const showStream = Boolean(novncUrl) && shouldShowNovnc(status);
+  const becameRunning = previous !== "running" && status === "running";
+
+  if (empty) {
+    empty.textContent =
+      status === "failed"
+        ? "Không thể kết nối noVNC"
+        : showStream
+          ? "Đang kết nối noVNC..."
+          : "Đang khởi động VM / noVNC...";
+  }
+
+  mountNovnc(screen, novncUrl, showStream, { reload: reloadNovnc || becameRunning });
 }
 
 function createPersonaCard(personaId, personaName, novncUrl) {
@@ -253,7 +276,7 @@ function renderDetailFromState(personaId) {
   document.getElementById("detail-persona-meta").textContent =
     status === "running" ? "Live desktop qua noVNC" : status;
 
-  mountNovnc(detailScreen, novncUrl, Boolean(novncUrl) && status !== "failed");
+  mountNovnc(detailScreen, novncUrl, Boolean(novncUrl) && shouldShowNovnc(status));
 
   const lastThought = [...sessionEvents].reverse().find((e) => e.type === "thought" && e.text);
   document.getElementById("detail-thought").textContent = lastThought?.text || "";
@@ -280,7 +303,7 @@ function handleStreamMessage(message) {
     for (const [personaId, session] of Object.entries(message.job.sessions)) {
       const card = personaCards.get(personaId);
       if (!card) continue;
-      updateCardStatus(card, session.status);
+      updateCardStatus(card, session.status, { reloadNovnc: session.status === "running" });
       if (session.novncUrl) personaNovncUrls.set(personaId, session.novncUrl);
       if (session.lastAction) updateCardAction(personaId, session.lastAction);
       if (session.events?.length) {
@@ -301,7 +324,7 @@ function handleStreamMessage(message) {
 
   if (message.type === "persona") {
     const card = personaCards.get(message.personaId);
-    if (card) updateCardStatus(card, message.status);
+    if (card) updateCardStatus(card, message.status, { reloadNovnc: message.status === "running" });
     if (message.error) updateCardAction(message.personaId, `✗ ${message.error}`);
     if (expandedPersonaId === message.personaId) {
       document.getElementById("detail-persona-meta").textContent = message.error || message.status;
