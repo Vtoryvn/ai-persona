@@ -97,20 +97,29 @@
           </form>
 
           <div id="session-view" class="session-view hidden">
-            <div class="computer">
-              <header class="computer-bar">
-                <span>Máy ảo</span>
-                <span id="computer-meta" class="meta">Chưa có session</span>
-              </header>
-              <div class="computer-screen">
-                <img id="computer-shot" alt="Màn hình máy ảo" class="hidden" />
-                <div id="computer-empty" class="computer-empty">Đang chờ Chrome trên VM...</div>
+            <header class="session-toolbar">
+              <div>
+                <strong>Theo dõi đánh giá</strong>
+                <span class="meta">Live desktop qua noVNC — bấm ô persona để xem chi tiết hành động AI</span>
               </div>
-            </div>
-            <div class="session-feed">
-              <header class="computer-bar"><span>Hoạt động</span></header>
-              <div id="session-thought" class="thought"></div>
-              <ol id="session-events" class="event-list"></ol>
+              <button type="button" id="session-grid-close" class="btn hidden">← Quay lại grid</button>
+            </header>
+            <div id="persona-grid" class="persona-grid"></div>
+            <div id="persona-detail" class="persona-detail hidden">
+              <div class="computer">
+                <header class="computer-bar">
+                  <span id="detail-persona-name">Máy ảo</span>
+                  <span id="detail-persona-meta" class="meta">Đang chạy...</span>
+                </header>
+                <div class="computer-screen">
+                  <div id="detail-stream-empty" class="computer-empty">Đang khởi động noVNC...</div>
+                </div>
+              </div>
+              <div class="session-feed">
+                <header class="computer-bar"><span>Hoạt động AI Agent</span></header>
+                <div id="detail-thought" class="thought"></div>
+                <ol id="detail-events" class="event-list"></ol>
+              </div>
             </div>
           </div>
         </section>

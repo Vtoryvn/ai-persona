@@ -79,6 +79,28 @@ export function resolveRunnerUrl(
   return `https://${persona.fly.app}.fly.dev`;
 }
 
+export function resolveNovncUrl(
+  persona: PersonaConfig,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const explicit = env[`PERSONA_${persona.id.toUpperCase().replace(/-/g, "_")}_NOVNC_URL`];
+  if (explicit) return explicit;
+
+  const runnerOverride = persona.runner?.url;
+  if (runnerOverride) {
+    try {
+      const url = new URL(runnerOverride);
+      const port = env.NOVNC_PORT ?? "6080";
+      return `${url.protocol}//${url.hostname}:${port}/vnc.html?autoconnect=true&resize=scale`;
+    } catch {
+      // fall through
+    }
+  }
+
+  const port = env.NOVNC_PORT ?? "6080";
+  return `https://${persona.fly.app}.fly.dev:${port}/vnc.html?autoconnect=true&resize=scale`;
+}
+
 export function defaultPersonaConfig(id: string): PersonaConfig {
   return personaConfigSchema.parse({
     id,

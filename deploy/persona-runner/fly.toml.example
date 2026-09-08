@@ -6,24 +6,46 @@ primary_region = "sin"
   PERSONA_ID = "first-timer"
   MCP_VIEWPORT = "1280x720"
   PORT = "8080"
+  NOVNC_PORT = "6080"
+  CHROME_DEBUG_PORT = "9222"
 
-[http_service]
+[[services]]
   internal_port = 8080
-  force_https = true
+  protocol = "tcp"
   auto_stop_machines = "stop"
   auto_start_machines = true
   min_machines_running = 0
 
-  [[http_service.checks]]
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+    force_https = true
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  [[services.http_checks]]
     interval = "30s"
     timeout = "10s"
-    grace_period = "60s"
+    grace_period = "120s"
     method = "GET"
     path = "/health"
 
+[[services]]
+  internal_port = 6080
+  protocol = "tcp"
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[services.ports]]
+    port = 6080
+    handlers = ["tls", "http"]
+
 [[vm]]
-  memory = "2gb"
+  memory = "1gb"
   cpu_kind = "shared"
-  cpus = 2
+  cpus = 1
 
 # LLM secrets: npm run persona -- sync-secrets  (reads local .env)

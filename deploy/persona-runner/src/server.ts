@@ -2,7 +2,7 @@ import Fastify from "fastify";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadProjectEnv, missionRequestSchema, type MissionEvent } from "@persona-system/shared";
-import { runMission } from "./agent.js";
+import { runMission, isChromeDebugReady } from "./agent.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -20,10 +20,15 @@ function wantsStream(accept: string | undefined, body: unknown): boolean {
 export async function buildServer() {
   const app = Fastify({ logger: true, requestTimeout: 0, connectionTimeout: 0 });
 
-  app.get("/health", async () => ({
-    ok: true,
-    persona_id: process.env.PERSONA_ID ?? "unknown",
-  }));
+  app.get("/health", async () => {
+    const chromeReady = await isChromeDebugReady();
+    return {
+      ok: true,
+      persona_id: process.env.PERSONA_ID ?? "unknown",
+      chrome_ready: chromeReady,
+      novnc_port: Number(process.env.NOVNC_PORT ?? 6080),
+    };
+  });
 
   app.post("/missions", async (request, reply) => {
     request.raw.setTimeout(0);

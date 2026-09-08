@@ -69,6 +69,24 @@ async function readSse(
   return lastResult;
 }
 
+async function waitForRunner(url: string, timeoutMs = Number(process.env.RUNNER_READY_TIMEOUT_MS ?? 180_000)) {
+  const healthUrl = `${url.replace(/\/$/, "")}/health`;
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const response = await fetch(healthUrl, { signal: AbortSignal.timeout(8000) });
+      if (response.ok) {
+        const payload = (await response.json()) as { chrome_ready?: boolean; ok?: boolean };
+        if (payload.chrome_ready === true || payload.chrome_ready === undefined) return;
+      }
+    } catch {
+      // machine may still be booting
+    }
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+  }
+  throw new Error(`Runner not ready: ${healthUrl}`);
+}
+
 async function dispatchMission(
   persona: PersonaConfig,
   options: EvalOptions,
@@ -95,6 +113,7 @@ async function dispatchMission(
   };
 
   try {
+    await waitForRunner(url);
     const response = await fetch(url, {
       method: "POST",
       headers: authHeaders(),
@@ -130,6 +149,33 @@ async function dispatchMission(
   }
 }
 
+async function runPersonaEval(
+  persona: PersonaConfig,
+  options: EvalOptions,
+  runDir: string,
+): Promise<PersonaEvalResult> {
+  options.onLog?.(`→ ${persona.name} (${persona.id})...`);
+  options.onEvent?.({
+    type: "status",
+    at: new Date().toISOString(),
+    personaId: persona.id,
+    message: `Bắt đầu ${persona.name}`,
+  });
+
+  const result = await dispatchMission(persona, options);
+  options.onLog?.(
+    result.ok ? `✓ ${persona.id} done` : `✗ ${persona.id}: ${result.error ?? "failed"}`,
+  );
+
+  await writeFile(
+    path.join(runDir, `${persona.id}.json`),
+    JSON.stringify(result.ok ? result.result : { error: result.error }, null, 2),
+    "utf8",
+  );
+
+  return result;
+}
+
 export async function runEval(options: EvalOptions): Promise<{
   runDir: string;
   results: PersonaEvalResult[];
@@ -148,27 +194,9 @@ export async function runEval(options: EvalOptions): Promise<{
   const runDir = options.outDir ?? path.join("artifacts", "evaluations", stamp);
   await mkdir(runDir, { recursive: true });
 
-  const results: PersonaEvalResult[] = [];
-  for (const persona of selected) {
-    options.onLog?.(`→ ${persona.name} (${persona.id})...`);
-    options.onEvent?.({
-      type: "status",
-      at: new Date().toISOString(),
-      personaId: persona.id,
-      message: `Bắt đầu ${persona.name}`,
-    });
-    const result = await dispatchMission(persona, options);
-    results.push(result);
-    options.onLog?.(
-      result.ok ? `✓ ${persona.id} done` : `✗ ${persona.id}: ${result.error ?? "failed"}`,
-    );
-
-    await writeFile(
-      path.join(runDir, `${persona.id}.json`),
-      JSON.stringify(result.ok ? result.result : { error: result.error }, null, 2),
-      "utf8",
-    );
-  }
+  const results = await Promise.all(
+    selected.map((persona) => runPersonaEval(persona, options, runDir)),
+  );
 
   return { runDir, results };
 }
