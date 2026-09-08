@@ -126,7 +126,7 @@ async function waitForChrome(timeoutMs = Number(process.env.CHROME_READY_TIMEOUT
 }
 
 function resolveMcpBin(): string {
-  return require.resolve("chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js");
+  return require.resolve("chrome-devtools-mcp/build/src/index.js");
 }
 
 function buildHeadlessTransport(mission: MissionRequest): StdioClientTransport {
