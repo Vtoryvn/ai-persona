@@ -100,9 +100,33 @@ function parseToolResult(result: unknown): ToolOutput {
   return { text: texts.join("\n"), images };
 }
 
-async function callMcpTool(client: Client, name: string, args: Record<string, unknown>): Promise<ToolOutput> {
-  const result = await client.callTool({ name, arguments: args });
-  return parseToolResult(result);
+async function callMcpTool(
+  client: Client,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<ToolOutput> {
+  const timeoutMs = Number(process.env.MCP_TOOL_TIMEOUT_MS ?? 180_000);
+  const maxAttempts = Number(process.env.MCP_TOOL_RETRIES ?? 1) + 1;
+
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const result = await client.callTool(
+        { name, arguments: args },
+        undefined,
+        { timeout: timeoutMs, resetTimeoutOnProgress: true },
+      );
+      return parseToolResult(result);
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      const timedOut = /timed out|-32001|RequestTimeout/i.test(message);
+      if (!timedOut || attempt >= maxAttempts) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
 async function isChromeDebugReady(): Promise<boolean> {

@@ -360,7 +360,13 @@ textarea {
   background: #000;
 }
 
+.persona-card-stream {
+  object-fit: contain;
+  z-index: 2;
+}
+
 .persona-card-screen iframe.hidden,
+.persona-card-stream.hidden,
 .detail-novnc.hidden {
   display: none;
 }
