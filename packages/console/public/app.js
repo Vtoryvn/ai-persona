@@ -95,6 +95,113 @@ function formToPersona() {
 function showForm(show) {
   formEl.classList.toggle("hidden", !show);
   emptyEl.classList.toggle("hidden", show);
+  if (show) document.getElementById("bulk-persona-panel").classList.add("hidden");
+}
+
+function slugifyId(value) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/^-+|-+$/g, "");
+}
+
+function updateBulkSaveLabel() {
+  const count = document.querySelectorAll(".bulk-persona-row").length;
+  document.getElementById("bulk-persona-save").textContent =
+    count ? `Lưu ${count} persona` : "Lưu persona";
+}
+
+function createBulkRow(initial = {}) {
+  const row = document.createElement("div");
+  row.className = "bulk-persona-row";
+  const id = initial.id ?? "";
+  row.innerHTML = `
+    <label>ID *<input class="bulk-field-id" value="${id}" pattern="[a-z0-9-]+" required />
+      <span class="meta bulk-fly-app">Fly: persona-${id || "…"}</span></label>
+    <label>Tên *<input class="bulk-field-name" value="${initial.name ?? ""}" required /></label>
+    <label>Mô tả *<input class="bulk-field-description" value="${initial.description ?? ""}" required /></label>
+    <label>Instructions *<textarea class="bulk-field-instructions" rows="3" required>${initial.instructions ?? ""}</textarea></label>
+    <button type="button" class="btn bulk-remove-row" title="Xóa dòng">✕</button>
+  `;
+  row.querySelector(".bulk-field-id").addEventListener("input", (e) => {
+    const slug = slugifyId(e.target.value);
+    row.querySelector(".bulk-fly-app").textContent = `Fly: persona-${slug || "…"}`;
+  });
+  row.querySelector(".bulk-remove-row").addEventListener("click", () => {
+    row.remove();
+    if (!document.querySelector(".bulk-persona-row")) addBulkRow();
+    updateBulkSaveLabel();
+  });
+  return row;
+}
+
+function addBulkRow(initial) {
+  document.getElementById("bulk-persona-rows").appendChild(createBulkRow(initial));
+  updateBulkSaveLabel();
+}
+
+function showBulkPanel(show) {
+  document.getElementById("bulk-persona-panel").classList.toggle("hidden", !show);
+  formEl.classList.add("hidden");
+  emptyEl.classList.toggle("hidden", show);
+  if (show && !document.querySelector(".bulk-persona-row")) addBulkRow();
+  if (show) updateBulkSaveLabel();
+}
+
+function readBulkDefaults() {
+  const rubric = document.getElementById("bulk-default-rubric").value
+    .split("\n").map((s) => s.trim()).filter(Boolean);
+  return {
+    browser: {
+      viewport: document.getElementById("bulk-default-viewport").value.trim() || "1280x720",
+      locale: document.getElementById("bulk-default-locale").value.trim() || "vi-VN",
+    },
+    fly: { region: document.getElementById("bulk-default-region").value.trim() || "sin" },
+    evaluation: { rubric: rubric.length ? rubric : ["clarity", "usability"], output_format: "json" },
+  };
+}
+
+function readBulkRows() {
+  return [...document.querySelectorAll(".bulk-persona-row")].map((row) => ({
+    id: slugifyId(row.querySelector(".bulk-field-id").value),
+    name: row.querySelector(".bulk-field-name").value.trim(),
+    description: row.querySelector(".bulk-field-description").value.trim(),
+    instructions: row.querySelector(".bulk-field-instructions").value,
+  }));
+}
+
+function validateBulkRows(rows) {
+  for (const row of rows) {
+    if (!row.id || !row.name || !row.description || !row.instructions.trim()) {
+      return "Mỗi dòng cần đủ ID, tên, mô tả và instructions.";
+    }
+  }
+  return "";
+}
+
+async function saveBulkPersonas() {
+  const rows = readBulkRows();
+  document.getElementById("bulk-persona-save").textContent = `Lưu ${rows.length} persona`;
+  const err = validateBulkRows(rows);
+  if (err) {
+    document.getElementById("bulk-status").textContent = err;
+    document.getElementById("bulk-status").className = "status error";
+    return;
+  }
+  const body = { defaults: readBulkDefaults(), personas: rows };
+  const result = await api("/api/personas/bulk", { method: "POST", body: JSON.stringify(body) });
+  const parts = [];
+  if (result.created?.length) parts.push(`Đã tạo: ${result.created.join(", ")}`);
+  if (result.skipped?.length) {
+    parts.push(`Bỏ qua (đã tồn tại): ${result.skipped.map((s) => s.id).join(", ")}`);
+  }
+  if (result.errors?.length) {
+    parts.push(`Lỗi: ${result.errors.map((e) => `${e.id} (${e.reason})`).join("; ")}`);
+  }
+  document.getElementById("bulk-status").textContent = parts.join(" · ") || "Không có thay đổi.";
+  document.getElementById("bulk-status").className = `status ${result.created?.length ? "ok" : "error"}`;
+  if (result.created?.length) {
+    await refreshList();
+    showBulkPanel(false);
+    emptyEl.classList.remove("hidden");
+  }
 }
 
 function renderCheckboxes(containerId) {
@@ -110,6 +217,44 @@ function renderCheckboxes(containerId) {
 
 function getCheckedIds(containerId) {
   return [...document.querySelectorAll(`#${containerId} input:checked`)].map((el) => el.value);
+}
+
+function renderEvalPersonaRows() {
+  const container = document.getElementById("eval-persona-rows");
+  container.innerHTML = "";
+  for (const p of allPersonas) {
+    const row = document.createElement("div");
+    row.className = "eval-persona-row";
+    row.dataset.personaId = p.id;
+    row.innerHTML = `
+      <label class="eval-persona-head check-item">
+        <input type="checkbox" class="eval-persona-check" value="${p.id}" checked />
+        <span>${p.name} <span class="meta">${p.id}</span></span>
+      </label>
+      <label class="eval-account-label meta">Prompt tài khoản (tùy chọn)</label>
+      <textarea class="eval-account-prompt" rows="2" placeholder="Đăng nhập user-a@test.com / pass123 — mỗi persona nên dùng tài khoản khác nhau"></textarea>
+    `;
+    container.appendChild(row);
+  }
+}
+
+function getEvalSubmitPayload() {
+  const personaIds = [];
+  const personaAccountPrompts = {};
+  for (const row of document.querySelectorAll(".eval-persona-row")) {
+    const check = row.querySelector(".eval-persona-check");
+    if (!check?.checked) continue;
+    personaIds.push(check.value);
+    const account = row.querySelector(".eval-account-prompt")?.value.trim();
+    if (account) personaAccountPrompts[check.value] = account;
+  }
+  return {
+    prompt: document.getElementById("eval-prompt").value.trim(),
+    personaIds,
+    personaAccountPrompts: Object.keys(personaAccountPrompts).length
+      ? personaAccountPrompts
+      : undefined,
+  };
 }
 
 function setJobBadge(status) {
@@ -480,7 +625,7 @@ async function refreshList(activeId = selectedId) {
     listEl.appendChild(li);
   }
   renderCheckboxes("ops-persona-checks");
-  renderCheckboxes("eval-persona-checks");
+  renderEvalPersonaRows();
 }
 
 async function selectPersona(id) {
@@ -500,6 +645,7 @@ async function createPersona() {
   if (!id) return;
   const slug = id.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-");
   if (!slug) return;
+  showBulkPanel(false);
   isNew = true;
   selectedId = slug;
   personaToForm(await api(`/api/personas/template/${slug}`));
@@ -568,20 +714,34 @@ document.getElementById("ops-health").addEventListener("click", () => {
 document.getElementById("eval-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   showView("eval");
-  const personaIds = getCheckedIds("eval-persona-checks");
-  await startJob(
-    "/api/ops/eval",
-    {
-      prompt: document.getElementById("eval-prompt").value.trim(),
-      personaIds,
-    },
-    { useStream: true, personaIds },
-  );
+  const body = getEvalSubmitPayload();
+  await startJob("/api/ops/eval", body, { useStream: true, personaIds: body.personaIds });
 });
 
 document.getElementById("session-grid-close").addEventListener("click", closePersonaDetail);
 
 newBtn.addEventListener("click", createPersona);
+
+document.getElementById("bulk-persona").addEventListener("click", () => showBulkPanel(true));
+document.getElementById("bulk-persona-cancel").addEventListener("click", () => {
+  showBulkPanel(false);
+  emptyEl.classList.remove("hidden");
+});
+document.getElementById("bulk-add-row").addEventListener("click", () => addBulkRow());
+document.getElementById("bulk-paste-ids").addEventListener("click", () => {
+  const raw = prompt("Dán danh sách ID (mỗi dòng một id):", "");
+  if (!raw) return;
+  for (const line of raw.split("\n")) {
+    const id = slugifyId(line);
+    if (id) addBulkRow({ id });
+  }
+});
+document.getElementById("bulk-persona-save").addEventListener("click", () => {
+  saveBulkPersonas().catch((e) => {
+    document.getElementById("bulk-status").textContent = e.message;
+    document.getElementById("bulk-status").className = "status error";
+  });
+});
 
 loadLlmBadge();
 refreshList();

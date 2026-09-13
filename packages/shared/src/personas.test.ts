@@ -22,6 +22,6 @@ test("resolveNovncUrl uses fly app and noVNC port", async () => {
   const persona = await loadPersonaFile(personaPath);
   assert.equal(
     resolveNovncUrl(persona, {}),
-    "https://persona-first-timer.fly.dev:6080/vnc.html?autoconnect=true&resize=scale",
+    "https://persona-first-timer.fly.dev:6080/vnc.html?autoconnect=true&resize=scale&path=websockify&reconnect=true&reconnect_delay=1000",
   );
 });

@@ -262,6 +262,47 @@ textarea {
   min-height: 120px;
 }
 
+.eval-persona-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.eval-persona-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.65rem 0.75rem;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.eval-persona-head {
+  margin: 0;
+}
+
+.eval-account-label {
+  margin: 0;
+}
+
+.eval-account-prompt {
+  width: 100%;
+  min-height: 3rem;
+  resize: vertical;
+  font: inherit;
+  padding: 0.5rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: inherit;
+}
+
+.eval-hint {
+  margin: 0.35rem 0 0.75rem;
+}
+
 .session-view {
   margin-top: 1.25rem;
 }
@@ -575,12 +616,80 @@ textarea {
   white-space: pre-wrap;
 }
 
+.persona-create-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.bulk-persona-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.bulk-section-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.bulk-defaults {
+  padding: 0.75rem 1rem;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.bulk-row-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.bulk-persona-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.bulk-persona-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 2fr auto;
+  gap: 0.5rem;
+  align-items: start;
+  padding: 0.75rem;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.bulk-persona-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+}
+
+.bulk-fly-app {
+  margin-top: 0.15rem;
+}
+
+.bulk-remove-row {
+  align-self: center;
+  padding: 0.35rem 0.55rem;
+}
+
 @media (max-width: 900px) {
   .layout {
     grid-template-columns: 1fr;
   }
 
   .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .bulk-persona-row {
     grid-template-columns: 1fr;
   }
 }
