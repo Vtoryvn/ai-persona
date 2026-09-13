@@ -37,6 +37,7 @@ interface EvalBody extends PersonaIdsBody {
   username?: string;
   password?: string;
   loginUrl?: string;
+  personaAccountPrompts?: Record<string, string>;
 }
 
 function writeSse(reply: { raw: NodeJS.WritableStream }, data: unknown) {
@@ -249,6 +250,7 @@ export function registerOpsRoutes(app: FastifyInstance, ctx: OpsContext) {
         username: body.username,
         password: body.password,
         loginUrl: body.loginUrl,
+        personaAccountPrompts: body.personaAccountPrompts,
         outDir: path.join(ctx.repoRoot, "artifacts", "evaluations", `ui-${Date.now()}`),
         onLog: log,
         onEvent: (event) => appendJobEvent(job, event),
