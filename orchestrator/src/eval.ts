@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { MissionEvent, MissionResult, PersonaConfig } from "@persona-system/shared";
+import { mergeEvalPrompt } from "./eval-prompt.js";
 
 export type LogFn = (line: string) => void;
 export type EventFn = (event: MissionEvent) => void;
@@ -8,6 +9,7 @@ export type EventFn = (event: MissionEvent) => void;
 export interface EvalOptions {
   prompt: string;
   personasDir: string;
+  personaAccountPrompts?: Record<string, string>;
   personaIds?: string[];
   productUrl?: string;
   username?: string;
@@ -99,9 +101,14 @@ async function dispatchMission(
   const runnerUrl = resolveRunnerUrl(persona);
   const url = `${runnerUrl}/missions`;
 
+  const prompt = mergeEvalPrompt(
+    options.prompt,
+    options.personaAccountPrompts?.[persona.id],
+  );
+
   const body = {
     persona_id: persona.id,
-    prompt: options.prompt,
+    prompt,
     product_url: options.productUrl,
     instructions: persona.instructions,
     rubric: persona.evaluation?.rubric,
