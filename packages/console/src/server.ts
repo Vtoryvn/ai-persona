@@ -3,8 +3,10 @@ import { fileURLToPath } from "node:url";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
 import {
+  buildPersonaFromBulkRow,
   defaultPersonaConfig,
   deletePersonaFile,
+  findDuplicateBulkIds,
   loadPersonaFile,
   loadPersonasDir,
   loadProjectEnv,
@@ -13,6 +15,8 @@ import {
   personaFilePath,
   resolveLlmConfig,
   savePersonaFile,
+  type BulkPersonaDefaults,
+  type BulkPersonaRow,
 } from "@persona-system/shared";
 import { registerOpsRoutes } from "./ops-routes.js";
 
@@ -84,6 +88,60 @@ export async function buildServer() {
     await savePersonaFile(personasDir, parsed.data);
     return reply.code(201).send(parsed.data);
   });
+
+  app.post<{ Body: { defaults?: BulkPersonaDefaults; personas?: BulkPersonaRow[] } }>(
+    "/api/personas/bulk",
+    async (request, reply) => {
+      const rows = request.body?.personas ?? [];
+      if (!rows.length) {
+        return reply.code(400).send({ error: "personas_required" });
+      }
+
+      const defaults = request.body?.defaults ?? {};
+      const duplicateIds = new Set(findDuplicateBulkIds(rows));
+      const created: string[] = [];
+      const skipped: { id: string; reason: "persona_exists" }[] = [];
+      const errors: { id: string; reason: string; details?: unknown }[] = [];
+
+      for (const row of rows) {
+        const id = row.id?.trim();
+        if (!id) {
+          errors.push({ id: row.id ?? "", reason: "missing_id" });
+          continue;
+        }
+        if (duplicateIds.has(id)) {
+          errors.push({ id, reason: "duplicate_in_request" });
+          continue;
+        }
+
+        let config;
+        try {
+          config = buildPersonaFromBulkRow(row, defaults);
+        } catch (error) {
+          errors.push({
+            id,
+            reason: "invalid_persona",
+            details: error instanceof Error ? error.message : error,
+          });
+          continue;
+        }
+
+        try {
+          await loadPersonaFile(personaFilePath(personasDir, config.id));
+          skipped.push({ id: config.id, reason: "persona_exists" });
+          continue;
+        } catch {
+          // new
+        }
+
+        await savePersonaFile(personasDir, config);
+        created.push(config.id);
+      }
+
+      const status = created.length ? 201 : 200;
+      return reply.code(status).send({ created, skipped, errors });
+    },
+  );
 
   app.put<{ Params: { id: string }; Body: unknown }>("/api/personas/:id", async (request, reply) => {
     const parsed = personaConfigSchema.safeParse(request.body);
