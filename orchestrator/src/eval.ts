@@ -69,15 +69,19 @@ async function readSse(
   return lastResult;
 }
 
-async function waitForRunner(url: string, timeoutMs = Number(process.env.RUNNER_READY_TIMEOUT_MS ?? 180_000)) {
-  const healthUrl = `${url.replace(/\/$/, "")}/health`;
+async function waitForRunner(
+  runnerUrl: string,
+  timeoutMs = Number(process.env.RUNNER_READY_TIMEOUT_MS ?? 180_000),
+) {
+  const healthUrl = `${runnerUrl.replace(/\/$/, "")}/health`;
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {
       const response = await fetch(healthUrl, { signal: AbortSignal.timeout(8000) });
-      if (response.ok) {
-        const payload = (await response.json()) as { chrome_ready?: boolean; ok?: boolean };
-        if (payload.chrome_ready === true || payload.chrome_ready === undefined) return;
+      const text = await response.text();
+      if (response.ok && text.trim()) {
+        const payload = JSON.parse(text) as { chrome_ready?: boolean; ok?: boolean };
+        if (payload.ok && (payload.chrome_ready === true || payload.chrome_ready === undefined)) return;
       }
     } catch {
       // machine may still be booting
@@ -92,7 +96,8 @@ async function dispatchMission(
   options: EvalOptions,
 ): Promise<PersonaEvalResult> {
   const { resolveRunnerUrl } = await import("@persona-system/shared");
-  const url = `${resolveRunnerUrl(persona)}/missions`;
+  const runnerUrl = resolveRunnerUrl(persona);
+  const url = `${runnerUrl}/missions`;
 
   const body = {
     persona_id: persona.id,
@@ -113,7 +118,7 @@ async function dispatchMission(
   };
 
   try {
-    await waitForRunner(url);
+    await waitForRunner(runnerUrl);
     const response = await fetch(url, {
       method: "POST",
       headers: authHeaders(),

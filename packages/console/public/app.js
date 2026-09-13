@@ -138,7 +138,25 @@ function renderEventList(listEl, events) {
   listEl.scrollTop = listEl.scrollHeight;
 }
 
-function mountNovnc(container, novncUrl, active) {
+function updateCardPreview(personaId, mime, data) {
+  const card = personaCards.get(personaId);
+  if (!card || !data) return;
+  const screen = card.querySelector(".persona-card-screen");
+  if (!screen) return;
+  let img = screen.querySelector(".persona-card-stream");
+  const empty = screen.querySelector(".persona-card-empty");
+  if (!img) {
+    img = document.createElement("img");
+    img.className = "persona-card-stream hidden";
+    img.alt = "VM preview";
+    screen.appendChild(img);
+  }
+  img.src = `data:${mime || "image/jpeg"};base64,${data}`;
+  img.classList.remove("hidden");
+  empty?.classList.add("hidden");
+}
+
+function mountNovnc(container, novncUrl, active, { reload = false } = {}) {
   const empty = container.querySelector(".persona-card-empty, .computer-empty");
   let iframe = container.querySelector("iframe");
 
@@ -154,26 +172,47 @@ function mountNovnc(container, novncUrl, active) {
       ? "detail-novnc"
       : "persona-card-novnc";
     iframe.title = "VM Live View";
+    iframe.allow = "fullscreen";
+    iframe.loading = "eager";
     container.appendChild(iframe);
   }
 
-  if (iframe.src !== novncUrl) iframe.src = novncUrl;
+  const nextSrc = reload ? `${novncUrl}${novncUrl.includes("?") ? "&" : "?"}_ts=${Date.now()}` : novncUrl;
+  if (reload || iframe.dataset.novncUrl !== novncUrl || !iframe.src) {
+    iframe.src = nextSrc;
+    iframe.dataset.novncUrl = novncUrl;
+  }
   iframe.classList.remove("hidden");
   empty?.classList.add("hidden");
 }
 
+function shouldShowNovnc(status) {
+  return status === "running" || status === "completed";
+}
+
 function updateCardStatus(card, status) {
+  const previous = card.dataset.status;
   card.dataset.status = status;
   const badge = card.querySelector(".persona-card-status");
   if (!badge) return;
   badge.textContent = status;
   badge.className = `persona-card-status ${status}`;
 
-  const personaId = card.dataset.personaId;
-  const novncUrl = personaNovncUrls.get(personaId);
   const screen = card.querySelector(".persona-card-screen");
-  const showStream = Boolean(novncUrl) && status !== "failed";
-  mountNovnc(screen, novncUrl, showStream);
+  const empty = screen?.querySelector(".persona-card-empty");
+  const showPreview = shouldShowNovnc(status);
+
+  if (empty) {
+    empty.textContent =
+      status === "failed"
+        ? "Không thể kết nối VM"
+        : showPreview
+          ? "Đang chờ preview từ VM..."
+          : "Đang khởi động VM...";
+    if (showPreview && previous !== "running" && status === "running") {
+      empty.classList.remove("hidden");
+    }
+  }
 }
 
 function createPersonaCard(personaId, personaName, novncUrl) {
@@ -189,7 +228,8 @@ function createPersonaCard(personaId, personaName, novncUrl) {
       <span class="persona-card-status pending">pending</span>
     </header>
     <div class="persona-card-screen">
-      <div class="persona-card-empty">Đang khởi động VM / noVNC...</div>
+      <div class="persona-card-empty">Đang khởi động VM...</div>
+      <img class="persona-card-stream hidden" alt="VM preview" />
     </div>
     <p class="persona-card-action">Chưa có hành động</p>
   `;
@@ -253,7 +293,9 @@ function renderDetailFromState(personaId) {
   document.getElementById("detail-persona-meta").textContent =
     status === "running" ? "Live desktop qua noVNC" : status;
 
-  mountNovnc(detailScreen, novncUrl, Boolean(novncUrl) && status !== "failed");
+  mountNovnc(detailScreen, novncUrl, Boolean(novncUrl) && shouldShowNovnc(status), {
+    reload: card?.dataset.status === "running" && !detailScreen.querySelector("iframe"),
+  });
 
   const lastThought = [...sessionEvents].reverse().find((e) => e.type === "thought" && e.text);
   document.getElementById("detail-thought").textContent = lastThought?.text || "";
@@ -283,6 +325,9 @@ function handleStreamMessage(message) {
       updateCardStatus(card, session.status);
       if (session.novncUrl) personaNovncUrls.set(personaId, session.novncUrl);
       if (session.lastAction) updateCardAction(personaId, session.lastAction);
+      if (session.screenshot?.data && session.screenshot.data !== "[omitted]") {
+        updateCardPreview(personaId, session.screenshot.mime, session.screenshot.data);
+      }
       if (session.events?.length) {
         personaEvents.set(
           personaId,
@@ -291,6 +336,11 @@ function handleStreamMessage(message) {
       }
     }
     if (expandedPersonaId) renderDetailFromState(expandedPersonaId);
+    return;
+  }
+
+  if (message.type === "frame") {
+    updateCardPreview(message.personaId, message.mime, message.data);
     return;
   }
 

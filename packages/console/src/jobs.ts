@@ -220,7 +220,15 @@ export function appendJobEvent(job: Job, event: MissionEvent) {
   const personaId = event.personaId;
   if (personaId) {
     const session = ensurePersonaSession(job, personaId);
-    if (session.status === "pending") session.status = "running";
+    if (session.status === "pending") {
+      session.status = "running";
+      publish(job, {
+        type: "persona",
+        personaId,
+        status: "running",
+        personaName: session.personaName,
+      });
+    }
     appendPersonaEvent(job, session, event);
     job.session = {
       personaId,
