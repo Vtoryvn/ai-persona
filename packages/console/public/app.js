@@ -112,6 +112,44 @@ function getCheckedIds(containerId) {
   return [...document.querySelectorAll(`#${containerId} input:checked`)].map((el) => el.value);
 }
 
+function renderEvalPersonaRows() {
+  const container = document.getElementById("eval-persona-rows");
+  container.innerHTML = "";
+  for (const p of allPersonas) {
+    const row = document.createElement("div");
+    row.className = "eval-persona-row";
+    row.dataset.personaId = p.id;
+    row.innerHTML = `
+      <label class="eval-persona-head check-item">
+        <input type="checkbox" class="eval-persona-check" value="${p.id}" checked />
+        <span>${p.name} <span class="meta">${p.id}</span></span>
+      </label>
+      <label class="eval-account-label meta">Prompt tài khoản (tùy chọn)</label>
+      <textarea class="eval-account-prompt" rows="2" placeholder="Đăng nhập user-a@test.com / pass123 — mỗi persona nên dùng tài khoản khác nhau"></textarea>
+    `;
+    container.appendChild(row);
+  }
+}
+
+function getEvalSubmitPayload() {
+  const personaIds = [];
+  const personaAccountPrompts = {};
+  for (const row of document.querySelectorAll(".eval-persona-row")) {
+    const check = row.querySelector(".eval-persona-check");
+    if (!check?.checked) continue;
+    personaIds.push(check.value);
+    const account = row.querySelector(".eval-account-prompt")?.value.trim();
+    if (account) personaAccountPrompts[check.value] = account;
+  }
+  return {
+    prompt: document.getElementById("eval-prompt").value.trim(),
+    personaIds,
+    personaAccountPrompts: Object.keys(personaAccountPrompts).length
+      ? personaAccountPrompts
+      : undefined,
+  };
+}
+
 function setJobBadge(status) {
   jobBadge.textContent = status;
   jobBadge.className = `badge ${status}`;
@@ -480,7 +518,7 @@ async function refreshList(activeId = selectedId) {
     listEl.appendChild(li);
   }
   renderCheckboxes("ops-persona-checks");
-  renderCheckboxes("eval-persona-checks");
+  renderEvalPersonaRows();
 }
 
 async function selectPersona(id) {
@@ -568,15 +606,8 @@ document.getElementById("ops-health").addEventListener("click", () => {
 document.getElementById("eval-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   showView("eval");
-  const personaIds = getCheckedIds("eval-persona-checks");
-  await startJob(
-    "/api/ops/eval",
-    {
-      prompt: document.getElementById("eval-prompt").value.trim(),
-      personaIds,
-    },
-    { useStream: true, personaIds },
-  );
+  const body = getEvalSubmitPayload();
+  await startJob("/api/ops/eval", body, { useStream: true, personaIds: body.personaIds });
 });
 
 document.getElementById("session-grid-close").addEventListener("click", closePersonaDetail);

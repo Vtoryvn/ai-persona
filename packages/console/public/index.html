@@ -92,7 +92,8 @@
           </header>
           <form id="eval-form" class="composer">
             <textarea id="eval-prompt" rows="5" required placeholder="Ví dụ: Vào https://example.com, đăng nhập user demo / pass secret, đi hết onboarding và nói cảm nhận của bạn."></textarea>
-            <div id="eval-persona-checks" class="check-grid"></div>
+            <p class="meta eval-hint">Prompt tài khoản riêng cho từng persona bên dưới — mỗi agent nên dùng tài khoản khác nhau khi chạy song song.</p>
+            <div id="eval-persona-rows" class="eval-persona-rows"></div>
             <button type="submit" class="btn primary">Chạy</button>
           </form>
 
