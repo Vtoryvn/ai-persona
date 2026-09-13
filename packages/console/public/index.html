@@ -19,7 +19,10 @@
           <button type="button" class="nav-btn" data-view="ops">Fly & Deploy</button>
           <button type="button" class="nav-btn" data-view="eval">Đánh giá</button>
         </nav>
-        <button id="new-persona" class="btn primary view-personas-only">+ Persona mới</button>
+        <div class="persona-create-actions view-personas-only">
+          <button id="new-persona" class="btn primary">+ Persona mới</button>
+          <button id="bulk-persona" class="btn">Tạo hàng loạt</button>
+        </div>
         <ul id="persona-list" class="persona-list view-personas-only"></ul>
       </aside>
 
@@ -28,6 +31,36 @@
         <section id="view-personas">
           <div id="empty-state" class="empty-state">
             Chọn persona bên trái hoặc tạo mới.
+          </div>
+          <div id="bulk-persona-panel" class="bulk-persona-panel hidden">
+            <header class="editor-header">
+              <div>
+                <h2>Tạo persona hàng loạt</h2>
+                <p>Cài đặt chung áp dụng cho tất cả dòng. Instructions phải nhập riêng từng persona.</p>
+              </div>
+              <button type="button" id="bulk-persona-cancel" class="btn">Hủy</button>
+            </header>
+            <section class="bulk-defaults">
+              <h3 class="bulk-section-title">Cài đặt chung</h3>
+              <div class="grid">
+                <label>Viewport <input id="bulk-default-viewport" value="1280x720" /></label>
+                <label>Locale <input id="bulk-default-locale" value="vi-VN" /></label>
+                <label>Fly region <input id="bulk-default-region" value="sin" /></label>
+              </div>
+              <label>Rubric mặc định (mỗi dòng một tiêu chí)
+                <textarea id="bulk-default-rubric" rows="2">clarity
+usability</textarea>
+              </label>
+            </section>
+            <div class="bulk-row-actions">
+              <button type="button" id="bulk-add-row" class="btn">+ Thêm dòng</button>
+              <button type="button" id="bulk-paste-ids" class="btn">Dán danh sách ID</button>
+            </div>
+            <div id="bulk-persona-rows" class="bulk-persona-rows"></div>
+            <div class="actions">
+              <button type="button" id="bulk-persona-save" class="btn primary">Lưu persona</button>
+            </div>
+            <p id="bulk-status" class="status"></p>
           </div>
           <form id="persona-form" class="hidden">
             <header class="editor-header">
