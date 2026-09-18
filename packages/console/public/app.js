@@ -219,6 +219,11 @@ function getCheckedIds(containerId) {
   return [...document.querySelectorAll(`#${containerId} input:checked`)].map((el) => el.value);
 }
 
+function syncEvalPersonaRow(row) {
+  const check = row.querySelector(".eval-persona-check");
+  row.classList.toggle("is-selected", Boolean(check?.checked));
+}
+
 function renderEvalPersonaRows() {
   const container = document.getElementById("eval-persona-rows");
   container.innerHTML = "";
@@ -228,13 +233,17 @@ function renderEvalPersonaRows() {
     row.dataset.personaId = p.id;
     row.innerHTML = `
       <label class="eval-persona-head check-item">
-        <input type="checkbox" class="eval-persona-check" value="${p.id}" checked />
-        <span>${p.name} <span class="meta">${p.id}</span></span>
+        <input type="checkbox" class="eval-persona-check" value="${p.id}" />
+        <span class="eval-persona-title">${p.name} <span class="meta">${p.id}</span></span>
       </label>
-      <label class="eval-account-label meta">Prompt tài khoản (tùy chọn)</label>
-      <textarea class="eval-account-prompt" rows="2" placeholder="Đăng nhập user-a@test.com / pass123 — mỗi persona nên dùng tài khoản khác nhau"></textarea>
+      <div class="eval-account-fields">
+        <label class="eval-account-label meta">Prompt tài khoản (tùy chọn)</label>
+        <textarea class="eval-account-prompt" rows="2" placeholder="user-a@test.com / pass123"></textarea>
+      </div>
     `;
+    row.querySelector(".eval-persona-check")?.addEventListener("change", () => syncEvalPersonaRow(row));
     container.appendChild(row);
+    syncEvalPersonaRow(row);
   }
 }
 
@@ -715,6 +724,10 @@ document.getElementById("eval-form").addEventListener("submit", async (event) =>
   event.preventDefault();
   showView("eval");
   const body = getEvalSubmitPayload();
+  if (!body.personaIds.length) {
+    window.alert("Chọn ít nhất một persona để chạy đánh giá.");
+    return;
+  }
   await startJob("/api/ops/eval", body, { useStream: true, personaIds: body.personaIds });
 });
 
