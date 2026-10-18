@@ -7,4 +7,13 @@ if (!upstream) {
 }
 
 const localUrl = await ProxyChain.anonymizeProxy(upstream);
-process.stdout.write(localUrl);
+process.stdout.write(`${localUrl}\n`);
+
+// Keep the local forwarder alive for Chrome; start.sh runs this in the background.
+const keepAlive = setInterval(() => {}, 86_400_000);
+function shutdown() {
+  clearInterval(keepAlive);
+  process.exit(0);
+}
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);

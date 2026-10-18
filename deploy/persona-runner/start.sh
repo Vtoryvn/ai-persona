@@ -14,10 +14,31 @@ echo "Starting desktop stack (${SCREEN_W}x${SCREEN_H}) on ${DISPLAY}..."
 mkdir -p "${CHROME_PROFILE_DIR}"
 
 LOCAL_PROXY=""
+PROXY_PID=""
 if [ -n "${BROWSER_PROXY_URL:-}" ]; then
+  PROXY_URL_FILE="/tmp/local-proxy.url"
+  rm -f "${PROXY_URL_FILE}"
   echo "Starting local proxy forwarder for upstream proxy..."
-  LOCAL_PROXY="$(node /app/deploy/persona-runner/scripts/anonymize-proxy.mjs)"
-  echo "Local proxy: ${LOCAL_PROXY}"
+  node /app/deploy/persona-runner/scripts/anonymize-proxy.mjs >"${PROXY_URL_FILE}" &
+  PROXY_PID=$!
+  for _ in $(seq 1 45); do
+    if [ -s "${PROXY_URL_FILE}" ]; then
+      LOCAL_PROXY="$(head -n1 "${PROXY_URL_FILE}" | tr -d '\r\n')"
+      break
+    fi
+    if ! kill -0 "${PROXY_PID}" 2>/dev/null; then
+      echo "Proxy forwarder exited before publishing a local URL." >&2
+      break
+    fi
+    sleep 1
+  done
+  if [ -z "${LOCAL_PROXY}" ]; then
+    echo "WARNING: proxy forwarder failed — continuing without proxy (check BROWSER_PROXY_URL)." >&2
+    kill "${PROXY_PID}" 2>/dev/null || true
+    PROXY_PID=""
+  else
+    echo "Local proxy: ${LOCAL_PROXY}"
+  fi
 fi
 
 PROXY_ARGS=()
