@@ -432,6 +432,7 @@ textarea {
   height: 100%;
   border: 0;
   background: #000;
+  z-index: 3;
 }
 
 .persona-card-stream {

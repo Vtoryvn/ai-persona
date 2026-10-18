@@ -334,12 +334,14 @@ function mountNovnc(container, novncUrl, active, { reload = false } = {}) {
       ? "detail-novnc"
       : "persona-card-novnc";
     iframe.title = "VM Live View";
-    iframe.allow = "fullscreen";
+    iframe.allow = "fullscreen; clipboard-read; clipboard-write";
     iframe.loading = "eager";
+    iframe.referrerPolicy = "no-referrer-when-downgrade";
     container.appendChild(iframe);
   }
 
-  const nextSrc = reload ? `${novncUrl}${novncUrl.includes("?") ? "&" : "?"}_ts=${Date.now()}` : novncUrl;
+  const cacheBust = reload ? `${novncUrl}${novncUrl.includes("?") ? "&" : "?"}_ts=${Date.now()}` : novncUrl;
+  const nextSrc = cacheBust;
   if (reload || iframe.dataset.novncUrl !== novncUrl || !iframe.src) {
     iframe.src = nextSrc;
     iframe.dataset.novncUrl = novncUrl;
@@ -380,7 +382,7 @@ async function requestHandoff(personaId, action) {
     }
     if (expandedPersonaId === personaId) {
       syncHandoffControls(personaId);
-      renderDetailFromState(personaId);
+      renderDetailFromState(personaId, { reloadNovnc: true });
     }
   } catch (error) {
     window.alert(error.message || "Không thể đổi chế độ handoff");
@@ -500,20 +502,37 @@ function appendPersonaEvent(personaId, event) {
   }
 }
 
-function renderDetailFromState(personaId) {
+function updateNovncOpenLink(novncUrl, visible) {
+  const link = document.getElementById("handoff-open-novnc");
+  if (!link) return;
+  if (!visible || !novncUrl) {
+    link.classList.add("hidden");
+    link.removeAttribute("href");
+    return;
+  }
+  link.href = novncUrl;
+  link.classList.remove("hidden");
+}
+
+function renderDetailFromState(personaId, options = {}) {
   const card = personaCards.get(personaId);
   const sessionEvents = personaEvents.get(personaId) || [];
   const novncUrl = personaNovncUrls.get(personaId);
   const status = card?.dataset.status || "pending";
   const detailScreen = document.querySelector("#persona-detail .computer-screen");
+  const showNovnc = Boolean(novncUrl) && shouldShowNovnc(status);
 
   document.getElementById("detail-persona-name").textContent =
     card?.querySelector(".persona-card-name")?.textContent || personaId;
   document.getElementById("detail-persona-meta").textContent = personaStatusLabel(status);
   syncHandoffControls(personaId);
+  updateNovncOpenLink(novncUrl, showNovnc);
 
-  mountNovnc(detailScreen, novncUrl, Boolean(novncUrl) && shouldShowNovnc(status), {
-    reload: card?.dataset.status === "running" && !detailScreen.querySelector("iframe"),
+  const shouldReload =
+    options.reloadNovnc || (status === "running" && !detailScreen.querySelector("iframe"));
+
+  mountNovnc(detailScreen, novncUrl, showNovnc, {
+    reload: shouldReload,
   });
 
   const lastThought = [...sessionEvents].reverse().find((e) => e.type === "thought" && e.text);
