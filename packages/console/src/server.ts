@@ -32,7 +32,10 @@ export async function buildServer() {
     prefix: "/",
   });
 
-  app.get("/api/health", async () => ({ ok: true }));
+  app.get("/api/health", async () => ({
+    ok: true,
+    features: { handoff: true },
+  }));
 
   app.get("/api/config/llm", async () => {
     try {

@@ -37,7 +37,15 @@ async function api(path, options = {}) {
     ...options,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || data.message || res.statusText);
+  if (!res.ok) {
+    const msg = data.error || data.message || res.statusText;
+    if (res.status === 404 && msg === "Not Found" && String(data.message || "").includes("/handoff")) {
+      throw new Error(
+        "Console API chưa được cập nhật (thiếu route handoff). Trên server persona.vtory.vn: git pull, npm run build, restart dịch vụ console — không chỉ Deploy persona Fly.",
+      );
+    }
+    throw new Error(msg);
+  }
   return data;
 }
 
