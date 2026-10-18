@@ -104,7 +104,41 @@ async function ensureChromeProfileVolume(
         `  fly volumes create ${CHROME_VOLUME_NAME} --size 1 -a ${app} -y -r ${region}`,
     );
   }
-  onLog?.(`✓ Created volume ${CHROME_VOLUME_NAME}`);
+  onLog?.(`✓ Created volume ${CHROME_VOLUME_NAME} — waiting for Fly registry...`);
+  await new Promise((resolve) => setTimeout(resolve, 8_000));
+}
+
+async function ensureSingleAppMachine(app: string, repoRoot: string, onLog?: LogFn): Promise<void> {
+  const code = await run(["scale", "count", "1", "-a", app, "--yes"], repoRoot, onLog);
+  if (code !== 0) onLog?.(`(scale count 1 for ${app} skipped — may need manual fix)`);
+}
+
+async function waitForChromeProfileVolume(
+  persona: PersonaConfig,
+  repoRoot: string,
+  onLog?: LogFn,
+): Promise<void> {
+  const region = persona.fly.region;
+  const app = persona.fly.app;
+  for (let attempt = 1; attempt <= 12; attempt += 1) {
+    const listed = await runCapture(["volumes", "list", "-a", app, "-j"], repoRoot, onLog);
+    if (listed.code === 0 && listed.stdout.trim()) {
+      try {
+        const volumes = JSON.parse(listed.stdout) as Array<{ name?: string; Name?: string; region?: string; Region?: string }>;
+        const hasVolume = volumes.some((v) => {
+          const name = v.name ?? v.Name;
+          const volRegion = v.region ?? v.Region;
+          return name === CHROME_VOLUME_NAME && (!volRegion || volRegion === region);
+        });
+        if (hasVolume) return;
+      } catch {
+        // retry
+      }
+    }
+    onLog?.(`  waiting for volume ${CHROME_VOLUME_NAME} (${attempt}/12)...`);
+    await new Promise((resolve) => setTimeout(resolve, 5_000));
+  }
+  throw new Error(`Volume ${CHROME_VOLUME_NAME} not visible on ${app} (${region}) after create`);
 }
 
 function selectPersonas(all: PersonaConfig[], personaIds?: string[]): PersonaConfig[] {
@@ -136,6 +170,13 @@ export async function deployPersonas(options: {
     const viewport = persona.browser?.viewport ?? "1280x720";
     template = template.replace(/MCP_VIEWPORT = "[^"]+"/, `MCP_VIEWPORT = "${viewport}"`);
 
+    if (!/PERSONA_HOST_CORES =/.test(template)) {
+      template = template.replace(
+        /PERSONA_MCP_DRIVER = "veil"/,
+        `PERSONA_MCP_DRIVER = "veil"\n  PERSONA_HOST_CORES = "8"\n  PERSONA_DEVICE_MEMORY_GB = "8"\n  PERSONA_DISPLAY_WIDTH = "1920"\n  PERSONA_DISPLAY_HEIGHT = "1080"`,
+      );
+    }
+
     await writeFile(flyToml, template, "utf8");
 
     let code = await run(["apps", "create", persona.fly.app, "--yes"], options.repoRoot, options.onLog);
@@ -144,7 +185,9 @@ export async function deployPersonas(options: {
     code = await run(["ips", "allocate-v4", "--shared", "-a", persona.fly.app], options.repoRoot, options.onLog);
     if (code !== 0) options.onLog?.(`(shared IPv4 may already be allocated, continuing)`);
 
+    await ensureSingleAppMachine(persona.fly.app, options.repoRoot, options.onLog);
     await ensureChromeProfileVolume(persona, options.repoRoot, options.onLog);
+    await waitForChromeProfileVolume(persona, options.repoRoot, options.onLog);
 
     code = await run(
       [
@@ -193,6 +236,20 @@ export async function syncLlmSecrets(options: {
       options.onLog?.(`  + BROWSER_PROXY_URL (${proxyUrl.replace(/:[^:@/]+@/, ":****@")})`);
     }
 
+    const fingerprintPreset =
+      persona.browser?.fingerprintPreset?.trim() ||
+      (persona.browser?.osProfile === "windows"
+        ? "windows-chrome"
+        : persona.browser?.osProfile === "mac"
+          ? "mac-chrome"
+          : persona.browser?.osProfile === "linux"
+            ? "linux-chrome"
+            : "");
+    if (fingerprintPreset && !/^(off|none|skip)$/i.test(fingerprintPreset)) {
+      secretArgs.push(`PERSONA_FINGERPRINT_PRESET=${fingerprintPreset}`);
+      options.onLog?.(`  + PERSONA_FINGERPRINT_PRESET=${fingerprintPreset}`);
+    }
+
     let code = await run(secretArgs, options.repoRoot, options.onLog);
     if (code !== 0) throw new Error(`Secret sync failed for ${persona.id}`);
 
@@ -203,6 +260,15 @@ export async function syncLlmSecrets(options: {
         options.onLog,
       );
       if (code !== 0) options.onLog?.(`  (BROWSER_PROXY_URL unset skipped)`);
+    }
+
+    if (!fingerprintPreset || /^(off|none|skip)$/i.test(fingerprintPreset)) {
+      code = await run(
+        ["secrets", "unset", "PERSONA_FINGERPRINT_PRESET", "-a", persona.fly.app],
+        options.repoRoot,
+        options.onLog,
+      );
+      if (code !== 0) options.onLog?.(`  (PERSONA_FINGERPRINT_PRESET unset skipped)`);
     }
 
     synced.push(persona.id);

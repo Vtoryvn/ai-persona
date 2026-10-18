@@ -1,4 +1,5 @@
 import type { MissionEvent } from "@persona-system/shared";
+import { ensureNovncStack } from "./novnc-stack.js";
 
 export type MissionEventHandler = (event: MissionEvent) => void | Promise<void>;
 
@@ -62,6 +63,7 @@ export async function requestPause(): Promise<{ ok: true } | { ok: false; reason
   if (!activePersonaId) return { ok: false, reason: "no_active_mission" };
   if (paused) return { ok: true };
   paused = true;
+  ensureNovncStack();
   await emitControl("pause");
   return { ok: true };
 }

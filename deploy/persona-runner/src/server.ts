@@ -3,6 +3,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadProjectEnv, missionRequestSchema, type MissionEvent } from "@persona-system/shared";
 import { runMission, isChromeDebugReady } from "./agent.js";
+import { isNovncRunning } from "./novnc-stack.js";
+import { startBootStealthDaemon } from "./stealth-daemon.js";
 import * as missionControl from "./mission-control.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -28,6 +30,7 @@ export async function buildServer() {
       persona_id: process.env.PERSONA_ID ?? "unknown",
       chrome_ready: chromeReady,
       novnc_port: Number(process.env.NOVNC_PORT ?? 6080),
+      novnc_running: isNovncRunning(),
     };
   });
 
@@ -128,6 +131,7 @@ export async function buildServer() {
 
 async function main() {
   await loadProjectEnv(repoRoot);
+  void startBootStealthDaemon();
   const app = await buildServer();
   await app.listen({
     port: Number(process.env.PORT ?? 8080),
