@@ -10,6 +10,8 @@ evaluation:
 browser:
   viewport: 1280x720
   locale: vi-VN
+  fingerprintPreset: linux-chrome
+  matchProxyGeo: true
 fly:
   app: persona-non-tech
   region: sin

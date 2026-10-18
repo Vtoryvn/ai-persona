@@ -11,6 +11,12 @@ primary_region = "sin"
   CHROME_USER_DATA_DIR = "/data/chrome-profile"
   PERSONA_REQUIRE_HEADED = "1"
   PERSONA_MCP_DRIVER = "veil"
+  PERSONA_HOST_CORES = "8"
+  PERSONA_DEVICE_MEMORY_GB = "8"
+  PERSONA_DISPLAY_WIDTH = "1920"
+  PERSONA_DISPLAY_HEIGHT = "1080"
+  PERSONA_NOVNC_LAZY = "0"
+  PERSONA_FINGERPRINT_PRESET = "linux-chrome"
 
 [mounts]
   source = "chrome_profile"
@@ -51,8 +57,8 @@ primary_region = "sin"
     handlers = ["tls", "http"]
 
 [[vm]]
-  memory = "2gb"
+  memory = "4gb"
   cpu_kind = "shared"
-  cpus = 1
+  cpus = 2
 
 # LLM secrets: npm run persona -- sync-secrets  (reads local .env)

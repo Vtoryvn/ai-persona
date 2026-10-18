@@ -20,6 +20,15 @@ export const missionRequestSchema = z.object({
     .object({
       viewport: z.string().optional(),
       locale: z.string().optional(),
+      timezone: z.string().optional(),
+      /** Veil preset: windows-chrome | mac-chrome | linux-chrome | android-chrome | off */
+      fingerprintPreset: z.string().optional(),
+      /** Shorthand: windows | mac | linux → matching Veil preset */
+      osProfile: z.enum(["windows", "mac", "linux"]).optional(),
+      /** When a proxy is set, align timezone/locale/geolocation with proxy egress (default true). */
+      matchProxyGeo: z.boolean().optional(),
+      /** Optional on mission payload when orchestrator sends persona browser config */
+      proxyUrl: z.string().min(8).optional(),
     })
     .optional(),
 });
@@ -77,6 +86,10 @@ export const personaConfigSchema = z.object({
     .object({
       viewport: z.string().optional(),
       locale: z.string().optional(),
+      timezone: z.string().optional(),
+      fingerprintPreset: z.string().optional(),
+      osProfile: z.enum(["windows", "mac", "linux"]).optional(),
+      matchProxyGeo: z.boolean().optional(),
       /** http://user:pass@host:port — synced to Fly as BROWSER_PROXY_URL */
       proxyUrl: z.string().min(8).optional(),
     })

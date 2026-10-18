@@ -1,4 +1,5 @@
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import OpenAI from "openai";
@@ -11,6 +12,14 @@ import {
   type MissionResult,
 } from "@persona-system/shared";
 import * as missionControl from "./mission-control.js";
+import {
+  buildVeilFingerprintArgs,
+  parseViewport,
+  resolveFingerprintPreset,
+} from "./fingerprint-profile.js";
+import { injectWebRtcMitigation } from "./chrome-cdp.js";
+import { resolveProxyUrlForGeo } from "./proxy-geo.js";
+import { syncPersistentStealthForMission } from "./stealth-daemon.js";
 
 const require = createRequire(import.meta.url);
 const MAX_TOOL_ROUNDS = 32;
@@ -37,7 +46,7 @@ function buildSystemPrompt(mission: MissionRequest): string {
     ? `\nTiêu chí gợi ý: ${mission.rubric.join(", ")}.\n`
     : "";
 
-  return `Bạn là một persona AI, đang dùng Chrome trên máy ảo Linux (Fly.io) qua Veil stealth browser để hoàn thành nhiệm vụ.
+  return `Bạn là một persona AI, đang dùng Chrome (Veil stealth profile) trên máy ảo để hoàn thành nhiệm vụ.
 
 ## Persona
 ${mission.instructions}
@@ -159,16 +168,17 @@ function resolveMcpDriver(): "veil" | "chrome-devtools-mcp" {
 
 function buildVeilTransport(headed: boolean): StdioClientTransport {
   const env: Record<string, string> = {
-    ...process.env,
+    ...(process.env as Record<string, string>),
     VEIL_CDP_URL: `127.0.0.1:${CHROME_DEBUG_PORT}`,
     VEIL_HEADLESS: headed ? "0" : "1",
   };
   if (process.env.CHROME_EXECUTABLE) {
     env.VEIL_EXECUTABLE_PATH = process.env.CHROME_EXECUTABLE;
   }
+  const entryPath = fileURLToPath(new URL("./veil-mcp-entry.js", import.meta.url));
   return new StdioClientTransport({
-    command: "npx",
-    args: ["-y", "-p", "@achamm/veilbrowser", "veil-mcp"],
+    command: process.execPath,
+    args: [entryPath],
     env,
     stderr: "inherit",
   });
@@ -231,6 +241,45 @@ function buildBrowserUrlChromeDevToolsTransport(): StdioClientTransport {
     } as Record<string, string>,
     stderr: "inherit",
   });
+}
+
+async function applyVeilStealthProfile(mcp: Client, mission: MissionRequest, onEvent?: MissionEventHandler) {
+  const built = await buildVeilFingerprintArgs(mission);
+  if (!built) return;
+
+  const preset = resolveFingerprintPreset(mission);
+  const geoHint = built.geoLabel ? ` — geo theo proxy: ${built.geoLabel}` : "";
+  await emit(onEvent, {
+    type: "status",
+    personaId: mission.persona_id,
+    message: `Áp Veil fingerprint (${preset})${geoHint}`,
+  });
+
+  try {
+    await injectWebRtcMitigation();
+    await syncPersistentStealthForMission(mission);
+  } catch {
+    // best-effort (WebRTC + persistent CDP guard for handoff/new tabs)
+  }
+
+  await callMcpTool(mcp, "veil_set_fingerprint", built.args);
+  await callMcpTool(mcp, "veil_goto", { url: "about:blank", waitUntil: "load" });
+
+  if (resolveProxyUrlForGeo(mission)) {
+    await emit(onEvent, {
+      type: "status",
+      personaId: mission.persona_id,
+      message: "Proxy + WebRTC mitigation active",
+    });
+  }
+
+  const viewport = parseViewport(mission);
+  if (viewport) {
+    await callMcpTool(mcp, "veil_set_viewport", {
+      ...viewport,
+      deviceScaleFactor: 1,
+    });
+  }
 }
 
 async function buildMcpTransport(mission: MissionRequest): Promise<StdioClientTransport> {
@@ -320,6 +369,9 @@ export async function runMission(
       personaId: mission.persona_id,
       message: `Chrome sẵn sàng (${resolveMcpDriver()}) — bắt đầu nhiệm vụ`,
     });
+    if (resolveMcpDriver() === "veil") {
+      await applyVeilStealthProfile(mcp, mission, onEvent);
+    }
     const listed = await mcp.listTools();
     const tools: ChatCompletionTool[] = (listed.tools ?? []).map(mcpToolToOpenAI);
     const screenshotTool = findScreenshotTool(tools);

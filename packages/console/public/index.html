@@ -88,6 +88,20 @@ usability</textarea>
               <label>Viewport <input id="field-viewport" placeholder="1280x720" /></label>
               <label>Locale <input id="field-locale" placeholder="vi-VN" /></label>
               <label
+                >Fingerprint (Veil)
+                <select id="field-fingerprint-preset">
+                  <option value="windows-chrome">Windows Chrome (mặc định Fly)</option>
+                  <option value="mac-chrome">macOS Chrome</option>
+                  <option value="linux-chrome">Linux Chrome</option>
+                  <option value="off">Tắt (Linux thật)</option>
+                </select>
+                <span class="meta">UA + Client Hints + WebGL — Sync secrets → PERSONA_FINGERPRINT_PRESET</span>
+              </label>
+              <label class="checkbox-row">
+                <input type="checkbox" id="field-match-proxy-geo" checked />
+                Khớp timezone/locale/vị trí với IP proxy (khuyên dùng khi có proxy)
+              </label>
+              <label
                 >Proxy (HTTP)
                 <input
                   id="field-proxy-url"

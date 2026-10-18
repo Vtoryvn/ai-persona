@@ -30,6 +30,8 @@ const fields = {
   flyApp: document.getElementById("field-fly-app"),
   flyRegion: document.getElementById("field-fly-region"),
   proxyUrl: document.getElementById("field-proxy-url"),
+  fingerprintPreset: document.getElementById("field-fingerprint-preset"),
+  matchProxyGeo: document.getElementById("field-match-proxy-geo"),
 };
 
 async function api(path, options = {}) {
@@ -79,6 +81,10 @@ function personaToForm(persona) {
   fields.flyApp.value = persona.fly?.app || `persona-${persona.id}`;
   fields.flyRegion.value = persona.fly?.region || "sin";
   fields.proxyUrl.value = persona.browser?.proxyUrl || "";
+  fields.fingerprintPreset.value =
+    persona.browser?.fingerprintPreset ||
+    (persona.browser?.osProfile === "linux" ? "linux-chrome" : "windows-chrome");
+  fields.matchProxyGeo.checked = persona.browser?.matchProxyGeo !== false;
   document.getElementById("form-title").textContent = persona.name;
   document.getElementById("form-subtitle").textContent = persona.description;
 }
@@ -94,6 +100,8 @@ function formToPersona() {
     browser: {
       viewport: fields.viewport.value.trim() || "1280x720",
       locale: fields.locale.value.trim() || "vi-VN",
+      fingerprintPreset: fields.fingerprintPreset.value || "windows-chrome",
+      matchProxyGeo: fields.matchProxyGeo.checked,
       ...(fields.proxyUrl.value.trim()
         ? { proxyUrl: fields.proxyUrl.value.trim() }
         : {}),
