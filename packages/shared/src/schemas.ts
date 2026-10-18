@@ -50,9 +50,10 @@ export const missionResultSchema = z.object({
 });
 
 export const missionEventSchema = z.object({
-  type: z.enum(["status", "thought", "tool", "screenshot", "result", "error"]),
+  type: z.enum(["status", "thought", "tool", "screenshot", "result", "error", "control"]),
   at: z.string(),
   personaId: z.string().optional(),
+  action: z.enum(["pause", "resume"]).optional(),
   message: z.string().optional(),
   text: z.string().optional(),
   name: z.string().optional(),

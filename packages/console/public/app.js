@@ -341,7 +341,61 @@ function mountNovnc(container, novncUrl, active, { reload = false } = {}) {
 }
 
 function shouldShowNovnc(status) {
-  return status === "running" || status === "completed";
+  return status === "running" || status === "paused_for_human" || status === "completed";
+}
+
+function personaStatusLabel(status) {
+  if (status === "running") return "Agent đang chạy — live desktop qua noVNC";
+  if (status === "paused_for_human") return "Bạn đang điều khiển — click vào màn hình noVNC để thao tác";
+  if (status === "completed") return "Hoàn thành";
+  if (status === "failed") return "Lỗi";
+  return status;
+}
+
+async function requestHandoff(personaId, action) {
+  if (!activeJobId) {
+    window.alert("Không có job đánh giá đang chạy.");
+    return;
+  }
+  const pauseBtn = document.getElementById("handoff-pause-btn");
+  const resumeBtn = document.getElementById("handoff-resume-btn");
+  pauseBtn.disabled = true;
+  resumeBtn.disabled = true;
+  try {
+    await api(`/api/ops/jobs/${activeJobId}/personas/${personaId}/handoff`, {
+      method: "POST",
+      body: JSON.stringify({ action }),
+    });
+    const card = personaCards.get(personaId);
+    if (card) {
+      updateCardStatus(card, action === "pause" ? "paused_for_human" : "running");
+    }
+    if (expandedPersonaId === personaId) {
+      syncHandoffControls(personaId);
+      renderDetailFromState(personaId);
+    }
+  } catch (error) {
+    window.alert(error.message || "Không thể đổi chế độ handoff");
+  } finally {
+    syncHandoffControls(personaId);
+  }
+}
+
+function syncHandoffControls(personaId) {
+  const wrap = document.getElementById("handoff-controls");
+  const pauseBtn = document.getElementById("handoff-pause-btn");
+  const resumeBtn = document.getElementById("handoff-resume-btn");
+  if (!wrap || !pauseBtn || !resumeBtn) return;
+
+  const card = personaCards.get(personaId);
+  const status = card?.dataset.status;
+  const canHandoff = Boolean(activeJobId) && (status === "running" || status === "paused_for_human");
+
+  wrap.classList.toggle("hidden", !canHandoff);
+  pauseBtn.classList.toggle("hidden", status !== "running");
+  resumeBtn.classList.toggle("hidden", status !== "paused_for_human");
+  pauseBtn.disabled = false;
+  resumeBtn.disabled = false;
 }
 
 function updateCardStatus(card, status) {
@@ -418,7 +472,10 @@ function updateCardAction(personaId, text) {
   if (!card || !text) return;
   const actionEl = card.querySelector(".persona-card-action");
   actionEl.textContent = text;
-  actionEl.classList.toggle("live", card.dataset.status === "running");
+  actionEl.classList.toggle(
+    "live",
+    card.dataset.status === "running" || card.dataset.status === "paused_for_human",
+  );
 }
 
 function appendPersonaEvent(personaId, event) {
@@ -444,8 +501,8 @@ function renderDetailFromState(personaId) {
 
   document.getElementById("detail-persona-name").textContent =
     card?.querySelector(".persona-card-name")?.textContent || personaId;
-  document.getElementById("detail-persona-meta").textContent =
-    status === "running" ? "Live desktop qua noVNC" : status;
+  document.getElementById("detail-persona-meta").textContent = personaStatusLabel(status);
+  syncHandoffControls(personaId);
 
   mountNovnc(detailScreen, novncUrl, Boolean(novncUrl) && shouldShowNovnc(status), {
     reload: card?.dataset.status === "running" && !detailScreen.querySelector("iframe"),
@@ -508,7 +565,9 @@ function handleStreamMessage(message) {
     if (card) updateCardStatus(card, message.status);
     if (message.error) updateCardAction(message.personaId, `✗ ${message.error}`);
     if (expandedPersonaId === message.personaId) {
-      document.getElementById("detail-persona-meta").textContent = message.error || message.status;
+      document.getElementById("detail-persona-meta").textContent =
+        message.error || personaStatusLabel(message.status);
+      syncHandoffControls(message.personaId);
     }
     return;
   }
@@ -732,6 +791,14 @@ document.getElementById("eval-form").addEventListener("submit", async (event) =>
 });
 
 document.getElementById("session-grid-close").addEventListener("click", closePersonaDetail);
+
+document.getElementById("handoff-pause-btn").addEventListener("click", () => {
+  if (expandedPersonaId) requestHandoff(expandedPersonaId, "pause");
+});
+
+document.getElementById("handoff-resume-btn").addEventListener("click", () => {
+  if (expandedPersonaId) requestHandoff(expandedPersonaId, "resume");
+});
 
 newBtn.addEventListener("click", createPersona);
 

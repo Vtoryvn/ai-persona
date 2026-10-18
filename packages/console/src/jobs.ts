@@ -3,7 +3,12 @@ import type { MissionEvent } from "@persona-system/shared";
 
 export type JobType = "deploy" | "sync-secrets" | "health" | "eval";
 export type JobStatus = "queued" | "running" | "completed" | "failed";
-export type PersonaSessionStatus = "pending" | "running" | "completed" | "failed";
+export type PersonaSessionStatus =
+  | "pending"
+  | "running"
+  | "paused_for_human"
+  | "completed"
+  | "failed";
 
 export interface SessionFrame {
   personaId?: string;
@@ -156,6 +161,9 @@ function formatAction(event: MissionEvent): string | undefined {
   if (event.type === "tool") return `⚙ ${event.name ?? event.message ?? "tool"}`;
   if (event.type === "thought" && event.text) return event.text.slice(0, 160);
   if (event.type === "status" && event.message) return event.message;
+  if (event.type === "control") {
+    return event.action === "pause" ? "⏸ Tạm dừng — bạn điều khiển VM" : "▶ Agent tiếp tục";
+  }
   if (event.type === "result") return "✓ Hoàn thành đánh giá";
   if (event.type === "error") return `✗ ${event.message ?? "Lỗi"}`;
   return event.message;
@@ -230,6 +238,23 @@ export function appendJobEvent(job: Job, event: MissionEvent) {
       });
     }
     appendPersonaEvent(job, session, event);
+    if (event.type === "control" && event.action === "pause") {
+      session.status = "paused_for_human";
+      publish(job, {
+        type: "persona",
+        personaId,
+        status: "paused_for_human",
+        personaName: session.personaName,
+      });
+    } else if (event.type === "control" && event.action === "resume") {
+      session.status = "running";
+      publish(job, {
+        type: "persona",
+        personaId,
+        status: "running",
+        personaName: session.personaName,
+      });
+    }
     job.session = {
       personaId,
       tool: session.tool,
@@ -252,6 +277,7 @@ export function appendJobEvent(job: Job, event: MissionEvent) {
     }
   }
 
+  if (event.type === "control" && event.message) appendJobLog(job, event.message);
   if (event.type === "status" && event.message) appendJobLog(job, event.message);
   if (event.type === "tool") appendJobLog(job, `⚙ ${event.name ?? event.message}`);
   if (event.type === "thought" && event.text) appendJobLog(job, event.text.slice(0, 240));

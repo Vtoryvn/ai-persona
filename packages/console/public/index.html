@@ -134,7 +134,7 @@ usability</textarea>
             <header class="session-toolbar">
               <div>
                 <strong>Theo dõi đánh giá</strong>
-                <span class="meta">Live desktop qua noVNC — bấm ô persona để xem chi tiết hành động AI</span>
+                <span class="meta">Live desktop qua noVNC — bấm persona để xem chi tiết; dùng «Tôi điều khiển» để tạm dừng agent và thao tác tay</span>
               </div>
               <button type="button" id="session-grid-close" class="btn hidden">← Quay lại grid</button>
             </header>
@@ -142,8 +142,14 @@ usability</textarea>
             <div id="persona-detail" class="persona-detail hidden">
               <div class="computer">
                 <header class="computer-bar">
-                  <span id="detail-persona-name">Máy ảo</span>
-                  <span id="detail-persona-meta" class="meta">Đang chạy...</span>
+                  <div class="computer-bar-title">
+                    <span id="detail-persona-name">Máy ảo</span>
+                    <span id="detail-persona-meta" class="meta">Đang chạy...</span>
+                  </div>
+                  <div id="handoff-controls" class="handoff-controls hidden">
+                    <button type="button" id="handoff-pause-btn" class="btn">Tôi điều khiển</button>
+                    <button type="button" id="handoff-resume-btn" class="btn primary hidden">Trả quyền cho agent</button>
+                  </div>
                 </header>
                 <div class="computer-screen">
                   <div id="detail-stream-empty" class="computer-empty">Đang khởi động noVNC...</div>

@@ -8,13 +8,14 @@ import {
   syncLlmSecrets,
   writeReport,
 } from "@persona-system/orchestrator";
-import { loadPersonasDir, resolveNovncUrl } from "@persona-system/shared";
+import { loadPersonasDir, resolveNovncUrl, resolveRunnerUrl } from "@persona-system/shared";
 import {
   createJob,
   getJob,
   listJobs,
   publicJob,
   appendJobEvent,
+  appendJobLog,
   initPersonaSessions,
   runJob,
   setPersonaStatus,
@@ -42,6 +43,33 @@ interface EvalBody extends PersonaIdsBody {
 
 function writeSse(reply: { raw: NodeJS.WritableStream }, data: unknown) {
   reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
+}
+
+function runnerAuthHeaders(): Record<string, string> {
+  const token = process.env.RUNNER_AUTH_TOKEN;
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
+
+async function callRunnerHandoff(
+  runnerUrl: string,
+  action: "pause" | "resume",
+): Promise<{ ok: boolean; status: number; body: unknown }> {
+  const url = `${runnerUrl.replace(/\/$/, "")}/missions/control`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: runnerAuthHeaders(),
+    body: JSON.stringify({ action }),
+    signal: AbortSignal.timeout(15_000),
+  });
+  let body: unknown = {};
+  try {
+    body = await response.json();
+  } catch {
+    body = { error: response.statusText };
+  }
+  return { ok: response.ok, status: response.status, body };
 }
 
 export function registerOpsRoutes(app: FastifyInstance, ctx: OpsContext) {
@@ -212,6 +240,54 @@ export function registerOpsRoutes(app: FastifyInstance, ctx: OpsContext) {
     });
 
     return reply.code(202).send({ jobId: job.id });
+  });
+
+  app.post<{
+    Params: { jobId: string; personaId: string };
+    Body: { action?: string };
+  }>("/api/ops/jobs/:jobId/personas/:personaId/handoff", async (request, reply) => {
+    const job = getJob(request.params.jobId);
+    if (!job) return reply.code(404).send({ error: "job_not_found" });
+    if (job.type !== "eval") return reply.code(400).send({ error: "handoff_only_for_eval_jobs" });
+
+    const { personaId } = request.params;
+    const session = job.sessions[personaId];
+    if (!session) return reply.code(404).send({ error: "persona_not_in_job" });
+
+    const action = request.body?.action;
+    if (action !== "pause" && action !== "resume") {
+      return reply.code(400).send({ error: "invalid_action", allowed: ["pause", "resume"] });
+    }
+
+    if (action === "pause" && session.status !== "running") {
+      return reply.code(409).send({ error: "cannot_pause", status: session.status });
+    }
+    if (action === "resume" && session.status !== "paused_for_human") {
+      return reply.code(409).send({ error: "cannot_resume", status: session.status });
+    }
+
+    const personas = await loadPersonasDir(ctx.personasDir);
+    const persona = personas.find((p) => p.id === personaId);
+    if (!persona) return reply.code(404).send({ error: "persona_not_found" });
+
+    const runnerResult = await callRunnerHandoff(resolveRunnerUrl(persona), action);
+    if (!runnerResult.ok) {
+      return reply.code(runnerResult.status).send(runnerResult.body);
+    }
+
+    if (action === "pause") {
+      setPersonaStatus(job, personaId, "paused_for_human");
+      appendJobLog(job, `⏸ ${persona.name}: tạm dừng agent — bạn điều khiển VM qua noVNC`);
+    } else {
+      setPersonaStatus(job, personaId, "running");
+      appendJobLog(job, `▶ ${persona.name}: agent tiếp tục`);
+    }
+
+    return {
+      ok: true,
+      personaId,
+      status: action === "pause" ? "paused_for_human" : "running",
+    };
   });
 
   app.post<{ Body: EvalBody }>("/api/ops/eval", async (request, reply) => {
