@@ -42,6 +42,71 @@ function run(flyArgs: string[], cwd: string, onLog?: LogFn): Promise<number> {
   });
 }
 
+function runCapture(flyArgs: string[], cwd: string, onLog?: LogFn): Promise<{ code: number; stdout: string }> {
+  const fly = resolveFlyBin();
+  return new Promise((resolve, reject) => {
+    const child = spawn(fly, flyArgs, {
+      cwd,
+      env: spawnEnv(),
+      stdio: ["ignore", "pipe", "pipe"],
+      shell: false,
+    });
+    let stdout = "";
+    child.on("error", reject);
+    child.stdout?.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString();
+      for (const line of chunk.toString().split("\n").filter(Boolean)) onLog?.(line);
+    });
+    child.stderr?.on("data", (chunk: Buffer) => {
+      for (const line of chunk.toString().split("\n").filter(Boolean)) onLog?.(line);
+    });
+    child.on("close", (code) => resolve({ code: code ?? 1, stdout }));
+  });
+}
+
+const CHROME_VOLUME_NAME = "chrome_profile";
+
+async function ensureChromeProfileVolume(
+  persona: PersonaConfig,
+  repoRoot: string,
+  onLog?: LogFn,
+): Promise<void> {
+  const region = persona.fly.region;
+  const app = persona.fly.app;
+
+  const listed = await runCapture(["volumes", "list", "-a", app, "-j"], repoRoot, onLog);
+  if (listed.code === 0 && listed.stdout.trim()) {
+    try {
+      const volumes = JSON.parse(listed.stdout) as Array<{ name?: string; Name?: string; region?: string; Region?: string }>;
+      const hasVolume = volumes.some((v) => {
+        const name = v.name ?? v.Name;
+        const volRegion = v.region ?? v.Region;
+        return name === CHROME_VOLUME_NAME && (!volRegion || volRegion === region);
+      });
+      if (hasVolume) {
+        onLog?.(`✓ Volume ${CHROME_VOLUME_NAME} already exists on ${app} (${region})`);
+        return;
+      }
+    } catch {
+      onLog?.(`(could not parse fly volumes list, will try create)`);
+    }
+  }
+
+  onLog?.(`Creating volume ${CHROME_VOLUME_NAME} on ${app} (${region})...`);
+  const created = await run(
+    ["volumes", "create", CHROME_VOLUME_NAME, "--size", "1", "-a", app, "-y", "-r", region],
+    repoRoot,
+    onLog,
+  );
+  if (created !== 0) {
+    throw new Error(
+      `Fly volume "${CHROME_VOLUME_NAME}" required in ${region}. Create it manually, then redeploy:\n` +
+        `  fly volumes create ${CHROME_VOLUME_NAME} --size 1 -a ${app} -y -r ${region}`,
+    );
+  }
+  onLog?.(`✓ Created volume ${CHROME_VOLUME_NAME}`);
+}
+
 function selectPersonas(all: PersonaConfig[], personaIds?: string[]): PersonaConfig[] {
   return personaIds?.length ? all.filter((p) => personaIds.includes(p.id)) : all;
 }
@@ -79,24 +144,7 @@ export async function deployPersonas(options: {
     code = await run(["ips", "allocate-v4", "--shared", "-a", persona.fly.app], options.repoRoot, options.onLog);
     if (code !== 0) options.onLog?.(`(shared IPv4 may already be allocated, continuing)`);
 
-    options.onLog?.(`Ensuring volume chrome_profile on ${persona.fly.app} (${persona.fly.region})...`);
-    code = await run(
-      [
-        "volumes",
-        "create",
-        "chrome_profile",
-        "--size",
-        "1",
-        "-a",
-        persona.fly.app,
-        "-y",
-        "-r",
-        persona.fly.region,
-      ],
-      options.repoRoot,
-      options.onLog,
-    );
-    if (code !== 0) options.onLog?.(`(volume chrome_profile may already exist, continuing)`);
+    await ensureChromeProfileVolume(persona, options.repoRoot, options.onLog);
 
     code = await run(
       [
