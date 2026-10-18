@@ -29,6 +29,7 @@ const fields = {
   locale: document.getElementById("field-locale"),
   flyApp: document.getElementById("field-fly-app"),
   flyRegion: document.getElementById("field-fly-region"),
+  proxyUrl: document.getElementById("field-proxy-url"),
 };
 
 async function api(path, options = {}) {
@@ -77,6 +78,7 @@ function personaToForm(persona) {
   fields.locale.value = persona.browser?.locale || "vi-VN";
   fields.flyApp.value = persona.fly?.app || `persona-${persona.id}`;
   fields.flyRegion.value = persona.fly?.region || "sin";
+  fields.proxyUrl.value = persona.browser?.proxyUrl || "";
   document.getElementById("form-title").textContent = persona.name;
   document.getElementById("form-subtitle").textContent = persona.description;
 }
@@ -92,6 +94,9 @@ function formToPersona() {
     browser: {
       viewport: fields.viewport.value.trim() || "1280x720",
       locale: fields.locale.value.trim() || "vi-VN",
+      ...(fields.proxyUrl.value.trim()
+        ? { proxyUrl: fields.proxyUrl.value.trim() }
+        : {}),
     },
     fly: {
       app: fields.flyApp.value.trim(),

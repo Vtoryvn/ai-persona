@@ -1,0 +1,7 @@
+{
+  "persona_id": "accessibility",
+  "prompt": "Mở https://example.com, đọc tiêu đề trang và trả lời bằng một câu tiếng Việt.",
+  "response": "Tiêu đề trang là “Example Domain”.",
+  "summary": "Tiêu đề trang là “Example Domain”.",
+  "completed_at": "2026-09-08T09:26:00.645Z"
+}

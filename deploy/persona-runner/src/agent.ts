@@ -14,9 +14,10 @@ import * as missionControl from "./mission-control.js";
 
 const require = createRequire(import.meta.url);
 const MAX_TOOL_ROUNDS = 32;
-const SCREENSHOT_TOOLS = /screenshot|snapshot|navigate|click|fill|type|press|scroll|wait/i;
+const SCREENSHOT_TOOLS = /screenshot|snapshot|navigate|click|fill|type|press|scroll|wait|veil_/i;
+const CHROME_DEBUG_PORT = process.env.CHROME_DEBUG_PORT ?? "9222";
 const CHROME_DEBUG_URL =
-  process.env.CHROME_DEBUG_URL ?? `http://127.0.0.1:${process.env.CHROME_DEBUG_PORT ?? "9222"}`;
+  process.env.CHROME_DEBUG_URL ?? `http://127.0.0.1:${CHROME_DEBUG_PORT}`;
 
 export type MissionEventHandler = (event: MissionEvent) => void | Promise<void>;
 
@@ -36,15 +37,16 @@ function buildSystemPrompt(mission: MissionRequest): string {
     ? `\nTiêu chí gợi ý: ${mission.rubric.join(", ")}.\n`
     : "";
 
-  return `Bạn là một persona AI, đang dùng Chrome trên máy ảo để hoàn thành nhiệm vụ.
+  return `Bạn là một persona AI, đang dùng Chrome trên máy ảo Linux (Fly.io) qua Veil stealth browser để hoàn thành nhiệm vụ.
 
 ## Persona
 ${mission.instructions}
 
 ${rubric}
-## Cách làm
-- Dùng browser tools để khám phá, click, điền form, chụp màn hình.
-- Làm như người dùng thật, từng bước.
+## Cách làm (Veil MCP)
+- Dùng browser tools (veil_goto, veil_snapshot, veil_click, veil_fill, veil_screenshot, …).
+- Luôn veil_snapshot trước khi click/fill; dùng **ref số nguyên** từ snapshot, không đoán CSS selector.
+- Thao tác từng bước, nhịp chậm như người dùng thật.
 - Khi xong, trả lời bằng tiếng Việt, tự do: nhận xét, phát hiện, đề xuất. Không bắt buộc JSON.
 - Nếu muốn có cấu trúc, có thể kèm JSON ở cuối nhưng phần chính là văn bản.`;
 }
@@ -150,11 +152,33 @@ async function waitForChrome(timeoutMs = Number(process.env.CHROME_READY_TIMEOUT
   throw new Error(`Chrome not ready at ${CHROME_DEBUG_URL}`);
 }
 
+function resolveMcpDriver(): "veil" | "chrome-devtools-mcp" {
+  const raw = (process.env.PERSONA_MCP_DRIVER ?? "veil").toLowerCase();
+  return raw === "chrome-devtools-mcp" ? "chrome-devtools-mcp" : "veil";
+}
+
+function buildVeilTransport(headed: boolean): StdioClientTransport {
+  const env: Record<string, string> = {
+    ...process.env,
+    VEIL_CDP_URL: `127.0.0.1:${CHROME_DEBUG_PORT}`,
+    VEIL_HEADLESS: headed ? "0" : "1",
+  };
+  if (process.env.CHROME_EXECUTABLE) {
+    env.VEIL_EXECUTABLE_PATH = process.env.CHROME_EXECUTABLE;
+  }
+  return new StdioClientTransport({
+    command: "npx",
+    args: ["-y", "-p", "@achamm/veilbrowser", "veil-mcp"],
+    env,
+    stderr: "inherit",
+  });
+}
+
 function resolveMcpBin(): string {
   return require.resolve("chrome-devtools-mcp/build/src/index.js");
 }
 
-function buildHeadlessTransport(mission: MissionRequest): StdioClientTransport {
+function buildHeadlessChromeDevToolsTransport(mission: MissionRequest): StdioClientTransport {
   const viewport = mission.browser?.viewport ?? process.env.MCP_VIEWPORT ?? "1280x720";
   const args = [
     "--yes",
@@ -182,7 +206,7 @@ function buildHeadlessTransport(mission: MissionRequest): StdioClientTransport {
   });
 }
 
-function buildBrowserUrlTransport(): StdioClientTransport {
+function buildBrowserUrlChromeDevToolsTransport(): StdioClientTransport {
   const mcpBin = resolveMcpBin();
   return new StdioClientTransport({
     command: process.execPath,
@@ -211,19 +235,32 @@ function buildBrowserUrlTransport(): StdioClientTransport {
 
 async function buildMcpTransport(mission: MissionRequest): Promise<StdioClientTransport> {
   const headed = await isChromeDebugReady();
+  const driver = resolveMcpDriver();
+
+  if (driver === "veil") {
+    if (headed) {
+      await waitForChrome(10_000);
+      return buildVeilTransport(true);
+    }
+    if (process.env.PERSONA_REQUIRE_HEADED === "1") {
+      throw new Error("Headed Chrome required but remote debugging is unavailable");
+    }
+    return buildVeilTransport(false);
+  }
+
   if (headed) {
     await waitForChrome(10_000);
-    return buildBrowserUrlTransport();
+    return buildBrowserUrlChromeDevToolsTransport();
   }
   if (process.env.PERSONA_REQUIRE_HEADED === "1") {
     throw new Error("Headed Chrome required but remote debugging is unavailable");
   }
-  return buildHeadlessTransport(mission);
+  return buildHeadlessChromeDevToolsTransport(mission);
 }
 
 function findScreenshotTool(tools: ChatCompletionTool[]): string | undefined {
   const names = tools.map((t) => t.function.name);
-  return names.find((n) => /take_screenshot|screenshot/i.test(n));
+  return names.find((n) => /veil_screenshot|take_screenshot|screenshot/i.test(n));
 }
 
 function toMissionResult(mission: MissionRequest, text: string): MissionResult {
@@ -278,7 +315,11 @@ export async function runMission(
   const model = llm.model;
 
   try {
-    await emit(onEvent, { type: "status", personaId: mission.persona_id, message: "Chrome sẵn sàng — bắt đầu nhiệm vụ" });
+    await emit(onEvent, {
+      type: "status",
+      personaId: mission.persona_id,
+      message: `Chrome sẵn sàng (${resolveMcpDriver()}) — bắt đầu nhiệm vụ`,
+    });
     const listed = await mcp.listTools();
     const tools: ChatCompletionTool[] = (listed.tools ?? []).map(mcpToolToOpenAI);
     const screenshotTool = findScreenshotTool(tools);
