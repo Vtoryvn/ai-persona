@@ -20,10 +20,12 @@ Panel **Tiến trình** ở dưới hiển thị log realtime (deploy có thể 
 ### Chuỗi bước trên UI
 
 1. Tab **Personas** — chỉnh prompt nếu cần, **Lưu**
-2. Tab **Fly & Deploy** — chọn 5 persona → **Deploy** → **Sync LLM secrets** → **Check health**
+2. Tab **Fly & Deploy** — chọn persona → **Deploy** → **Sync LLM secrets** (LLM + proxy) → **Check health**
 3. Tab **Đánh giá** — nhập URL + auth → **Chạy đánh giá** → xem báo cáo
 
 `.env` local cần có `LLM_*` và `FLY_API_TOKEN` (hoặc `fly auth login`).
+
+**Stealth browser (Veil + proxy + profile):** Tab Personas → nhập **Proxy** dạng `http://user:pass@host:port` → Lưu → Deploy persona → Sync secrets. Runner dùng Veil MCP (`PERSONA_MCP_DRIVER=veil`), Chrome profile persistent trên volume Fly `/data`, egress qua proxy upstream.
 
 ## CLI (tuỳ chọn)
 

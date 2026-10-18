@@ -8,6 +8,13 @@ primary_region = "sin"
   PORT = "8080"
   NOVNC_PORT = "6080"
   CHROME_DEBUG_PORT = "9222"
+  CHROME_USER_DATA_DIR = "/data/chrome-profile"
+  PERSONA_REQUIRE_HEADED = "1"
+  PERSONA_MCP_DRIVER = "veil"
+
+[mounts]
+  source = "chrome_profile"
+  destination = "/data"
 
 [[services]]
   internal_port = 8080

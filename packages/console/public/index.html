@@ -87,6 +87,16 @@ usability</textarea>
             <div class="grid">
               <label>Viewport <input id="field-viewport" placeholder="1280x720" /></label>
               <label>Locale <input id="field-locale" placeholder="vi-VN" /></label>
+              <label
+                >Proxy (HTTP)
+                <input
+                  id="field-proxy-url"
+                  type="url"
+                  autocomplete="off"
+                  placeholder="http://user:pass@host:4000"
+                />
+                <span class="meta">Đồng bộ Fly qua «Sync LLM secrets» → BROWSER_PROXY_URL</span>
+              </label>
               <label>Fly app <input id="field-fly-app" required /></label>
               <label>Fly region <input id="field-fly-region" required /></label>
             </div>

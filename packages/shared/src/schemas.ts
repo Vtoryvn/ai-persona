@@ -77,6 +77,8 @@ export const personaConfigSchema = z.object({
     .object({
       viewport: z.string().optional(),
       locale: z.string().optional(),
+      /** http://user:pass@host:port — synced to Fly as BROWSER_PROXY_URL */
+      proxyUrl: z.string().min(8).optional(),
     })
     .optional(),
   fly: z.object({

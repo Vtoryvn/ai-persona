@@ -7,8 +7,23 @@ SCREEN_W="${VIEWPORT%%x*}"
 SCREEN_H="${VIEWPORT##*x}"
 NOVNC_PORT="${NOVNC_PORT:-6080}"
 CHROME_DEBUG_PORT="${CHROME_DEBUG_PORT:-9222}"
+CHROME_PROFILE_DIR="${CHROME_USER_DATA_DIR:-/data/chrome-profile}"
 
 echo "Starting desktop stack (${SCREEN_W}x${SCREEN_H}) on ${DISPLAY}..."
+
+mkdir -p "${CHROME_PROFILE_DIR}"
+
+LOCAL_PROXY=""
+if [ -n "${BROWSER_PROXY_URL:-}" ]; then
+  echo "Starting local proxy forwarder for upstream proxy..."
+  LOCAL_PROXY="$(node /app/deploy/persona-runner/scripts/anonymize-proxy.mjs)"
+  echo "Local proxy: ${LOCAL_PROXY}"
+fi
+
+PROXY_ARGS=()
+if [ -n "${LOCAL_PROXY}" ]; then
+  PROXY_ARGS=(--proxy-server="${LOCAL_PROXY}")
+fi
 
 Xvfb "${DISPLAY}" -screen 0 "${SCREEN_W}x${SCREEN_H}x24" &
 openbox &
@@ -17,9 +32,10 @@ google-chrome \
   --disable-gpu \
   --disable-dev-shm-usage \
   --no-first-run \
-  --user-data-dir=/tmp/chrome-data \
+  --user-data-dir="${CHROME_PROFILE_DIR}" \
   --remote-debugging-port="${CHROME_DEBUG_PORT}" \
   --window-size="${SCREEN_W},${SCREEN_H}" \
+  "${PROXY_ARGS[@]}" \
   about:blank &
 
 echo "Waiting for Chrome remote debugging on :${CHROME_DEBUG_PORT}..."

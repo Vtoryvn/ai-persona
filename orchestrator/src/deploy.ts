@@ -79,6 +79,25 @@ export async function deployPersonas(options: {
     code = await run(["ips", "allocate-v4", "--shared", "-a", persona.fly.app], options.repoRoot, options.onLog);
     if (code !== 0) options.onLog?.(`(shared IPv4 may already be allocated, continuing)`);
 
+    options.onLog?.(`Ensuring volume chrome_profile on ${persona.fly.app} (${persona.fly.region})...`);
+    code = await run(
+      [
+        "volumes",
+        "create",
+        "chrome_profile",
+        "--size",
+        "1",
+        "-a",
+        persona.fly.app,
+        "-y",
+        "-r",
+        persona.fly.region,
+      ],
+      options.repoRoot,
+      options.onLog,
+    );
+    if (code !== 0) options.onLog?.(`(volume chrome_profile may already exist, continuing)`);
+
     code = await run(
       [
         "deploy",
@@ -110,21 +129,34 @@ export async function syncLlmSecrets(options: {
   const synced: string[] = [];
 
   for (const persona of selected) {
-    options.onLog?.(`Sync LLM secrets → ${persona.fly.app} (${llm.source})`);
-    const code = await run(
-      [
-        "secrets",
-        "set",
-        "-a",
-        persona.fly.app,
-        `LLM_API_KEY=${llm.apiKey}`,
-        `LLM_BASE_URL=${llm.baseUrl}`,
-        `LLM_MODEL=${llm.model}`,
-      ],
-      options.repoRoot,
-      options.onLog,
-    );
+    options.onLog?.(`Sync secrets → ${persona.fly.app} (${llm.source})`);
+    const secretArgs = [
+      "secrets",
+      "set",
+      "-a",
+      persona.fly.app,
+      `LLM_API_KEY=${llm.apiKey}`,
+      `LLM_BASE_URL=${llm.baseUrl}`,
+      `LLM_MODEL=${llm.model}`,
+    ];
+    const proxyUrl = persona.browser?.proxyUrl?.trim();
+    if (proxyUrl) {
+      secretArgs.push(`BROWSER_PROXY_URL=${proxyUrl}`);
+      options.onLog?.(`  + BROWSER_PROXY_URL (${proxyUrl.replace(/:[^:@/]+@/, ":****@")})`);
+    }
+
+    let code = await run(secretArgs, options.repoRoot, options.onLog);
     if (code !== 0) throw new Error(`Secret sync failed for ${persona.id}`);
+
+    if (!proxyUrl) {
+      code = await run(
+        ["secrets", "unset", "BROWSER_PROXY_URL", "-a", persona.fly.app],
+        options.repoRoot,
+        options.onLog,
+      );
+      if (code !== 0) options.onLog?.(`  (BROWSER_PROXY_URL unset skipped)`);
+    }
+
     synced.push(persona.id);
     options.onLog?.(`✓ Secrets synced for ${persona.fly.app}`);
   }
