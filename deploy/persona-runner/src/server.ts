@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadProjectEnv, missionRequestSchema, type MissionEvent } from "@persona-system/shared";
 import { runMission, isChromeDebugReady } from "./agent.js";
+import * as missionControl from "./mission-control.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -28,6 +29,37 @@ export async function buildServer() {
       chrome_ready: chromeReady,
       novnc_port: Number(process.env.NOVNC_PORT ?? 6080),
     };
+  });
+
+  app.get("/missions/control", async () => ({
+    active: missionControl.hasActiveMission(),
+    paused: missionControl.isPaused(),
+    persona_id: missionControl.getActivePersonaId() ?? null,
+  }));
+
+  app.post<{ Body: { action?: string } }>("/missions/control", async (request, reply) => {
+    if (!authorize(request.headers.authorization)) {
+      return reply.code(401).send({ error: "unauthorized" });
+    }
+
+    const action = request.body?.action;
+    if (action === "pause") {
+      const result = await missionControl.requestPause();
+      if (!result.ok) {
+        return reply.code(409).send({ error: result.reason });
+      }
+      return { ok: true, paused: true, persona_id: missionControl.getActivePersonaId() ?? null };
+    }
+
+    if (action === "resume") {
+      const result = await missionControl.requestResume();
+      if (!result.ok) {
+        return reply.code(409).send({ error: result.reason });
+      }
+      return { ok: true, paused: false, persona_id: missionControl.getActivePersonaId() ?? null };
+    }
+
+    return reply.code(400).send({ error: "invalid_action", allowed: ["pause", "resume"] });
   });
 
   app.post("/missions", async (request, reply) => {

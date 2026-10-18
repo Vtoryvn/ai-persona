@@ -10,6 +10,7 @@ import {
   type MissionRequest,
   type MissionResult,
 } from "@persona-system/shared";
+import * as missionControl from "./mission-control.js";
 
 const require = createRequire(import.meta.url);
 const MAX_TOOL_ROUNDS = 32;
@@ -267,6 +268,7 @@ export async function runMission(
 
   const mcp = new Client({ name: "persona-runner", version: "0.1.0" });
   await mcp.connect(await buildMcpTransport(mission));
+  missionControl.beginMission(mission.persona_id, onEvent);
 
   const llm = await resolveLlmConfig();
   const openai = new OpenAI({
@@ -287,6 +289,7 @@ export async function runMission(
     ];
 
     for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
+      await missionControl.waitUntilRunning();
       const completion = await openai.chat.completions.create({
         model,
         messages,
@@ -306,6 +309,7 @@ export async function runMission(
       if (assistant.tool_calls?.length) {
         for (const call of assistant.tool_calls) {
           if (call.type !== "function") continue;
+          await missionControl.waitUntilRunning();
           let parsedArgs: Record<string, unknown> = {};
           try {
             parsedArgs = JSON.parse(call.function.arguments || "{}") as Record<string, unknown>;
@@ -372,6 +376,7 @@ export async function runMission(
     });
     throw error;
   } finally {
+    missionControl.endMission();
     await mcp.close();
   }
 }
