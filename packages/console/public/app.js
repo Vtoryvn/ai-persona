@@ -356,7 +356,9 @@ function shouldShowNovnc(status) {
 
 function personaStatusLabel(status) {
   if (status === "running") return "Agent đang chạy — live desktop qua noVNC";
-  if (status === "paused_for_human") return "Bạn đang điều khiển — click vào màn hình noVNC để thao tác";
+  if (status === "paused_for_human") {
+    return "Bạn đang điều khiển — dùng «Mở noVNC tab mới» nếu iframe nhấp nháy Connected/Connecting";
+  }
   if (status === "completed") return "Hoàn thành";
   if (status === "failed") return "Lỗi";
   return status;

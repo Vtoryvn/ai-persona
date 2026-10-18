@@ -36,7 +36,8 @@ if ! curl -sf "http://127.0.0.1:${CHROME_DEBUG_PORT}/json/version" >/dev/null 2>
   exit 1
 fi
 
-x11vnc -display "${DISPLAY}" -forever -nopw -listen 0.0.0.0 -rfbport 5900 &
+# -shared: iframe + tab noVNC cùng lúc không đá nhau (tránh connected/connecting loop)
+x11vnc -display "${DISPLAY}" -forever -shared -nopw -listen 0.0.0.0 -rfbport 5900 &
 /opt/noVNC/utils/novnc_proxy --vnc localhost:5900 --listen "${NOVNC_PORT}" &
 
 echo "noVNC proxy listening on :${NOVNC_PORT}"

@@ -91,14 +91,14 @@ export function resolveNovncUrl(
     try {
       const url = new URL(runnerOverride);
       const port = env.NOVNC_PORT ?? "6080";
-      return `${url.protocol}//${url.hostname}:${port}/vnc.html?autoconnect=true&resize=scale&path=websockify&reconnect=true&reconnect_delay=1000`;
+      return `${url.protocol}//${url.hostname}:${port}/vnc.html?autoconnect=true&resize=scale&path=websockify&reconnect=true&reconnect_delay=3000`;
     } catch {
       // fall through
     }
   }
 
   const port = env.NOVNC_PORT ?? "6080";
-  return `https://${persona.fly.app}.fly.dev:${port}/vnc.html?autoconnect=true&resize=scale&path=websockify&reconnect=true&reconnect_delay=1000`;
+  return `https://${persona.fly.app}.fly.dev:${port}/vnc.html?autoconnect=true&resize=scale&path=websockify&reconnect=true&reconnect_delay=3000`;
 }
 
 export function defaultPersonaConfig(id: string): PersonaConfig {
